@@ -43,9 +43,9 @@ describe('schema', () => {
 
   it('seed inserta 6 topics predefinidos', () => {
     const topics = getAllTopics(db)
-    expect(topics).toHaveLength(6)
+    expect(topics).toHaveLength(7)
     expect(topics.map((t) => t.name).sort()).toEqual([
-      'blocker', 'chore', 'decision', 'feature', 'fix', 'idea',
+      'blocker', 'chore', 'decision', 'feature', 'fix', 'idea', 'reminder',
     ])
   })
 })

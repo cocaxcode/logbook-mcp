@@ -156,11 +156,12 @@ export function insertTodo(
   topicId: number | null,
   content: string,
   priority: string = 'normal',
+  remindAt?: string,
 ): TodoWithMeta {
   const stmt = db.prepare(
-    'INSERT INTO todos (repo_id, topic_id, content, priority) VALUES (?, ?, ?, ?)',
+    'INSERT INTO todos (repo_id, topic_id, content, priority, remind_at) VALUES (?, ?, ?, ?, ?)',
   )
-  const result = stmt.run(repoId, topicId, content, priority)
+  const result = stmt.run(repoId, topicId, content, priority, remindAt ?? null)
   return db
     .prepare(`${TODO_WITH_META_SQL} WHERE t.id = ?`)
     .get(result.lastInsertRowid) as TodoWithMeta
@@ -401,6 +402,54 @@ export function getCompletedTodos(
       `${TODO_WITH_META_SQL} WHERE ${where} ORDER BY t.completed_at DESC`,
     )
     .all(...params) as TodoWithMeta[]
+}
+
+// ── Reminders ──
+
+export interface ReminderGroup {
+  repo_name: string | null
+  reminders: TodoWithMeta[]
+}
+
+export function getDueReminders(db: Database.Database): {
+  today: ReminderGroup[]
+  overdue: ReminderGroup[]
+} {
+  const now = new Date()
+  const today = now.toISOString().split('T')[0]
+  const tomorrow = new Date(now.getTime() + 86400000).toISOString().split('T')[0]
+
+  const todayItems = db
+    .prepare(
+      `${TODO_WITH_META_SQL} WHERE t.status = 'pending' AND t.remind_at >= ? AND t.remind_at < ? ORDER BY t.remind_at`,
+    )
+    .all(today, tomorrow) as TodoWithMeta[]
+
+  const overdueItems = db
+    .prepare(
+      `${TODO_WITH_META_SQL} WHERE t.status = 'pending' AND t.remind_at < ? ORDER BY t.remind_at`,
+    )
+    .all(today) as TodoWithMeta[]
+
+  return {
+    today: groupByRepo(todayItems),
+    overdue: groupByRepo(overdueItems),
+  }
+}
+
+function groupByRepo(items: TodoWithMeta[]): ReminderGroup[] {
+  const map = new Map<string, TodoWithMeta[]>()
+  for (const item of items) {
+    const key = item.repo_name ?? 'global'
+    if (!map.has(key)) map.set(key, [])
+    map.get(key)!.push(item)
+  }
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([repo_name, reminders]) => ({
+      repo_name: repo_name === 'global' ? null : repo_name,
+      reminders,
+    }))
 }
 
 // ── Topic resolution (auto-create) ──

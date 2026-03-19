@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS todos (
   content TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
   priority TEXT NOT NULL DEFAULT 'normal',
+  remind_at TEXT,
   completed_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -41,6 +42,7 @@ CREATE INDEX IF NOT EXISTS idx_todos_repo ON todos(repo_id);
 CREATE INDEX IF NOT EXISTS idx_todos_topic ON todos(topic_id);
 CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
 CREATE INDEX IF NOT EXISTS idx_todos_date ON todos(created_at);
+CREATE INDEX IF NOT EXISTS idx_todos_remind ON todos(remind_at);
 
 CREATE TABLE IF NOT EXISTS code_todo_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,5 +102,6 @@ INSERT OR IGNORE INTO topics (name, description, commit_prefix, is_custom) VALUE
   ('chore', 'Mantenimiento general', 'refactor,docs,ci,build,chore,test,perf', 0),
   ('idea', 'Ideas y propuestas futuras', NULL, 0),
   ('decision', 'Decisiones tomadas', NULL, 0),
-  ('blocker', 'Bloqueos activos', NULL, 0);
+  ('blocker', 'Bloqueos activos', NULL, 0),
+  ('reminder', 'Recordatorios con fecha', NULL, 0);
 `

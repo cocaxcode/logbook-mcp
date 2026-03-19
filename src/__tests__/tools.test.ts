@@ -231,13 +231,13 @@ describe('logbook_search (simulado)', () => {
 describe('logbook_topics (simulado)', () => {
   it('lista topics predefinidos', () => {
     const topics = getAllTopics(db)
-    expect(topics).toHaveLength(6)
+    expect(topics).toHaveLength(7)
   })
 
   it('crea topic custom', () => {
     const topic = insertTopic(db, 'security', 'Temas de seguridad')
     expect(topic.is_custom).toBe(1)
-    expect(getAllTopics(db)).toHaveLength(7)
+    expect(getAllTopics(db)).toHaveLength(8)
   })
 
   it('falla al crear duplicado', () => {

@@ -26,19 +26,24 @@ export function registerTodoAddTool(server: McpServer): void {
         .optional()
         .default('normal')
         .describe('Prioridad del TODO individual'),
+      remind_at: z
+        .string()
+        .optional()
+        .describe('Fecha recordatorio (YYYY-MM-DD). Se asigna topic "reminder" automaticamente.'),
       items: z
         .array(
           z.object({
             content: z.string().min(1).max(2000).describe('Contenido del TODO'),
             topic: z.string().optional().describe('Topic'),
             priority: priorityEnum.optional().default('normal').describe('Prioridad'),
+            remind_at: z.string().optional().describe('Fecha recordatorio (YYYY-MM-DD)'),
           }),
         )
         .max(50)
         .optional()
         .describe('Array de TODOs para crear varios a la vez (max 50)'),
     },
-    async ({ content, topic, priority, items }) => {
+    async ({ content, topic, priority, remind_at, items }) => {
       try {
         if (!content && (!items || items.length === 0)) {
           return {
@@ -56,12 +61,14 @@ export function registerTodoAddTool(server: McpServer): void {
 
         const todoItems: TodoAddItem[] = items
           ? items
-          : [{ content: content!, topic, priority: priority ?? 'normal' }]
+          : [{ content: content!, topic, priority: priority ?? 'normal', remind_at }]
 
         const results: TodoWithMeta[] = []
 
         for (const item of todoItems) {
-          const topicId = item.topic ? resolveTopicId(db, item.topic) : null
+          // Auto-assign topic "reminder" if remind_at is set and no topic
+          const effectiveTopic = item.remind_at && !item.topic ? 'reminder' : item.topic
+          const topicId = effectiveTopic ? resolveTopicId(db, effectiveTopic) : null
 
           const todo = insertTodo(
             db,
@@ -69,6 +76,7 @@ export function registerTodoAddTool(server: McpServer): void {
             topicId,
             item.content,
             item.priority ?? 'normal',
+            item.remind_at,
           )
           results.push(todo)
         }

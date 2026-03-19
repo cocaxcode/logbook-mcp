@@ -8,6 +8,7 @@ import { registerTodoEditTool } from './tools/todo-edit.js'
 import { registerTodoRmTool } from './tools/todo-rm.js'
 import { registerLogTool } from './tools/log.js'
 import { registerSearchTool } from './tools/search.js'
+import { registerRemindersResource } from './resources/reminders.js'
 
 declare const __PKG_VERSION__: string
 const VERSION = typeof __PKG_VERSION__ !== 'undefined' ? __PKG_VERSION__ : '0.0.0'
@@ -27,6 +28,9 @@ export function createServer(): McpServer {
   registerTodoRmTool(server)
   registerLogTool(server)
   registerSearchTool(server)
+
+  // Resources
+  registerRemindersResource(server)
 
   return server
 }
