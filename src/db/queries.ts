@@ -403,6 +403,99 @@ export function getCompletedTodos(
     .all(...params) as TodoWithMeta[]
 }
 
+// ── Code TODO Sync ──
+
+export interface CodeTodoSnapshot {
+  id: number
+  repo_id: number
+  file: string
+  line: number
+  tag: string
+  content: string
+  topic_name: string
+  first_seen_at: string
+  resolved_at: string | null
+}
+
+export function syncCodeTodos(
+  db: Database.Database,
+  repoId: number,
+  currentTodos: { file: string; content: string; tag: string; topic_name: string; line: number }[],
+): { added: number; resolved: number } {
+  const sync = db.transaction(() => {
+    // Get all unresolved snapshots for this repo
+    const existing = db
+      .prepare('SELECT * FROM code_todo_snapshots WHERE repo_id = ? AND resolved_at IS NULL')
+      .all(repoId) as CodeTodoSnapshot[]
+
+    // Build a set of current code TODOs (file+content as key)
+    const currentSet = new Set(currentTodos.map((t) => `${t.file}::${t.content}`))
+
+    // Mark resolved: existed before but not in current scan
+    let resolved = 0
+    for (const snap of existing) {
+      const key = `${snap.file}::${snap.content}`
+      if (!currentSet.has(key)) {
+        db.prepare('UPDATE code_todo_snapshots SET resolved_at = datetime(\'now\') WHERE id = ?')
+          .run(snap.id)
+        resolved++
+      }
+    }
+
+    // Build set of existing keys
+    const existingSet = new Set(existing.map((s) => `${s.file}::${s.content}`))
+
+    // Also include already-resolved ones to avoid re-inserting
+    const allSnapshots = db
+      .prepare('SELECT file, content FROM code_todo_snapshots WHERE repo_id = ?')
+      .all(repoId) as { file: string; content: string }[]
+    const allSet = new Set(allSnapshots.map((s) => `${s.file}::${s.content}`))
+
+    // Add new: in current scan but never seen before
+    let added = 0
+    for (const todo of currentTodos) {
+      const key = `${todo.file}::${todo.content}`
+      if (!allSet.has(key)) {
+        db.prepare(
+          'INSERT INTO code_todo_snapshots (repo_id, file, line, tag, content, topic_name) VALUES (?, ?, ?, ?, ?, ?)',
+        ).run(repoId, todo.file, todo.line, todo.tag, todo.content, todo.topic_name)
+        added++
+      } else if (existingSet.has(key)) {
+        // Update line number if the TODO moved
+        db.prepare('UPDATE code_todo_snapshots SET line = ? WHERE repo_id = ? AND file = ? AND content = ? AND resolved_at IS NULL')
+          .run(todo.line, repoId, todo.file, todo.content)
+      }
+    }
+
+    return { added, resolved }
+  })
+
+  return sync()
+}
+
+export function getResolvedCodeTodos(
+  db: Database.Database,
+  repoId: number,
+  from?: string,
+  to?: string,
+): CodeTodoSnapshot[] {
+  const conditions = ['repo_id = ?', 'resolved_at IS NOT NULL']
+  const params: (string | number)[] = [repoId]
+
+  if (from) {
+    conditions.push('resolved_at >= ?')
+    params.push(from)
+  }
+  if (to) {
+    conditions.push('resolved_at < ?')
+    params.push(to)
+  }
+
+  return db
+    .prepare(`SELECT * FROM code_todo_snapshots WHERE ${conditions.join(' AND ')} ORDER BY resolved_at DESC`)
+    .all(...params) as CodeTodoSnapshot[]
+}
+
 // ── Utils ──
 
 function sanitizeFts(query: string): string {

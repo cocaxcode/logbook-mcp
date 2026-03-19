@@ -42,6 +42,22 @@ CREATE INDEX IF NOT EXISTS idx_todos_topic ON todos(topic_id);
 CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
 CREATE INDEX IF NOT EXISTS idx_todos_date ON todos(created_at);
 
+CREATE TABLE IF NOT EXISTS code_todo_snapshots (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+  file TEXT NOT NULL,
+  line INTEGER NOT NULL,
+  tag TEXT NOT NULL,
+  content TEXT NOT NULL,
+  topic_name TEXT NOT NULL,
+  first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+  resolved_at TEXT,
+  UNIQUE(repo_id, file, content)
+);
+
+CREATE INDEX IF NOT EXISTS idx_code_snapshots_repo ON code_todo_snapshots(repo_id);
+CREATE INDEX IF NOT EXISTS idx_code_snapshots_resolved ON code_todo_snapshots(resolved_at);
+
 CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(
   content,
   content='notes',

@@ -4,6 +4,7 @@ import { getDb } from '../db/connection.js'
 import {
   getCompletedTodos,
   getNotes,
+  getResolvedCodeTodos,
   getTopicByName,
 } from '../db/queries.js'
 import { autoRegisterRepo } from '../git/detect-repo.js'
@@ -61,6 +62,11 @@ export function registerLogTool(server: McpServer): void {
         const notes = type === 'todos' ? [] : getNotes(db, filters)
         const completedTodos = type === 'notes' ? [] : getCompletedTodos(db, filters)
 
+        // Resolved code TODOs (disappeared from code)
+        const resolvedCodeTodos = (type === 'notes' || !repo)
+          ? []
+          : getResolvedCodeTodos(db, repo.id, dateFrom, dateTo)
+
         const entries: LogEntry[] = [
           ...notes.map((n) => ({
             type: 'note' as const,
@@ -71,6 +77,11 @@ export function registerLogTool(server: McpServer): void {
             type: 'todo' as const,
             data: t,
             timestamp: t.completed_at ?? t.created_at,
+          })),
+          ...resolvedCodeTodos.map((ct) => ({
+            type: 'code_todo_resolved' as const,
+            data: { file: ct.file, line: ct.line, tag: ct.tag, content: ct.content, topic_name: ct.topic_name },
+            timestamp: ct.resolved_at!,
           })),
         ].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
 
@@ -85,6 +96,7 @@ export function registerLogTool(server: McpServer): void {
               summary: {
                 notes: notes.length,
                 todos_completed: completedTodos.length,
+                code_todos_resolved: resolvedCodeTodos.length,
                 total: entries.length,
               },
             }),

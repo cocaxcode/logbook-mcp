@@ -65,8 +65,8 @@ export interface TodoGroup {
 }
 
 export interface LogEntry {
-  type: 'note' | 'todo'
-  data: NoteWithMeta | TodoWithMeta
+  type: 'note' | 'todo' | 'code_todo_resolved'
+  data: NoteWithMeta | TodoWithMeta | { file: string; line: number; tag: string; content: string; topic_name: string }
   timestamp: string
 }
 

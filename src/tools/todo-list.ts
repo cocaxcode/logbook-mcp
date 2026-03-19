@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { getDb } from '../db/connection.js'
-import { getTopicByName, getTodos } from '../db/queries.js'
+import { getTopicByName, getTodos, syncCodeTodos } from '../db/queries.js'
 import { autoRegisterRepo, detectRepoPath } from '../git/detect-repo.js'
 import { scanCodeTodos } from '../git/code-todos.js'
 import type { CodeTodo, TodoGroup, TodoWithMeta } from '../types.js'
@@ -9,7 +9,7 @@ import type { CodeTodo, TodoGroup, TodoWithMeta } from '../types.js'
 export function registerTodoListTool(server: McpServer): void {
   server.tool(
     'logbook_todo_list',
-    'Lista TODOs agrupados por topic. Incluye TODOs manuales y del codigo (TODO/FIXME/HACK/BUG). Por defecto muestra pendientes del proyecto actual.',
+    'Lista TODOs agrupados por topic. Incluye manuales y del codigo (TODO/FIXME/HACK/BUG). Sincroniza automaticamente: code TODOs que desaparecen del codigo se marcan como resueltos.',
     {
       status: z
         .enum(['pending', 'done', 'all'])
@@ -60,12 +60,18 @@ export function registerTodoListTool(server: McpServer): void {
                 limit,
               })
 
-        // Code TODOs from git grep
+        // Code TODOs from git grep + sync
         let codeTodos: CodeTodo[] = []
+        let syncResult: { added: number; resolved: number } | null = null
+
         if (source !== 'manual' && status !== 'done') {
           const repoPath = scope === 'project' ? detectRepoPath() : null
-          if (repoPath) {
+          if (repoPath && repo) {
             codeTodos = scanCodeTodos(repoPath)
+
+            // Sync: detect resolved code TODOs (disappeared from code)
+            syncResult = syncCodeTodos(db, repo.id, codeTodos)
+
             if (topic) {
               codeTodos = codeTodos.filter((ct) => ct.topic_name === topic)
             }
@@ -100,6 +106,9 @@ export function registerTodoListTool(server: McpServer): void {
                 manual: manualTodos.length,
                 code: codeTodos.length,
                 total: manualTodos.length + codeTodos.length,
+                ...(syncResult && (syncResult.added > 0 || syncResult.resolved > 0)
+                  ? { sync: syncResult }
+                  : {}),
               },
             }),
           }],

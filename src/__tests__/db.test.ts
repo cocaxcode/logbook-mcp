@@ -19,6 +19,8 @@ import {
   searchNotes,
   searchTodos,
   getCompletedTodos,
+  syncCodeTodos,
+  getResolvedCodeTodos,
 } from '../db/queries.js'
 
 let db: Database.Database
@@ -263,6 +265,64 @@ describe('completed todos (log)', () => {
     const completed = getCompletedTodos(db, { repoId })
     expect(completed).toHaveLength(1)
     expect(completed[0].content).toBe('Hecho')
+  })
+})
+
+describe('code TODO sync', () => {
+  it('primer sync guarda snapshots', () => {
+    const repoId = seedRepo(db)
+    const todos = [
+      { file: 'src/a.ts', line: 10, tag: 'TODO', content: 'add auth', topic_name: 'feature' },
+      { file: 'src/b.ts', line: 20, tag: 'FIXME', content: 'handle null', topic_name: 'fix' },
+    ]
+    const result = syncCodeTodos(db, repoId, todos)
+    expect(result.added).toBe(2)
+    expect(result.resolved).toBe(0)
+  })
+
+  it('detecta TODOs resueltos (desaparecieron del codigo)', () => {
+    const repoId = seedRepo(db)
+    const initial = [
+      { file: 'src/a.ts', line: 10, tag: 'TODO', content: 'add auth', topic_name: 'feature' },
+      { file: 'src/b.ts', line: 20, tag: 'FIXME', content: 'handle null', topic_name: 'fix' },
+    ]
+    syncCodeTodos(db, repoId, initial)
+
+    // Segundo scan: solo queda uno
+    const current = [
+      { file: 'src/a.ts', line: 10, tag: 'TODO', content: 'add auth', topic_name: 'feature' },
+    ]
+    const result = syncCodeTodos(db, repoId, current)
+    expect(result.added).toBe(0)
+    expect(result.resolved).toBe(1)
+
+    const resolved = getResolvedCodeTodos(db, repoId)
+    expect(resolved).toHaveLength(1)
+    expect(resolved[0].content).toBe('handle null')
+  })
+
+  it('no re-inserta TODOs ya resueltos que reaparecen', () => {
+    const repoId = seedRepo(db)
+    const todos = [
+      { file: 'src/a.ts', line: 10, tag: 'TODO', content: 'add auth', topic_name: 'feature' },
+    ]
+
+    syncCodeTodos(db, repoId, todos)
+    syncCodeTodos(db, repoId, []) // desaparece
+    const result = syncCodeTodos(db, repoId, todos) // reaparece
+
+    expect(result.added).toBe(0) // no re-inserta
+  })
+
+  it('sync sin cambios no modifica nada', () => {
+    const repoId = seedRepo(db)
+    const todos = [
+      { file: 'src/a.ts', line: 10, tag: 'TODO', content: 'add auth', topic_name: 'feature' },
+    ]
+    syncCodeTodos(db, repoId, todos)
+    const result = syncCodeTodos(db, repoId, todos)
+    expect(result.added).toBe(0)
+    expect(result.resolved).toBe(0)
   })
 })
 
