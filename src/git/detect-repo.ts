@@ -1,12 +1,12 @@
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { basename } from 'node:path'
 import type Database from 'better-sqlite3'
 import type { Repo } from '../types.js'
-import { getRepoByPath, insertRepo } from '../db/queries.js'
+import { getRepoByPath, insertRepo, getRepoByName } from '../db/queries.js'
 
 export function detectRepoPath(): string | null {
   try {
-    const result = execSync('git rev-parse --show-toplevel', {
+    const result = execFileSync('git', ['rev-parse', '--show-toplevel'], {
       encoding: 'utf-8',
       timeout: 5000,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -19,7 +19,7 @@ export function detectRepoPath(): string | null {
 
 export function isGitRepo(path: string): boolean {
   try {
-    execSync(`git -C "${path}" rev-parse --is-inside-work-tree`, {
+    execFileSync('git', ['-C', path, 'rev-parse', '--is-inside-work-tree'], {
       encoding: 'utf-8',
       timeout: 5000,
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -37,6 +37,15 @@ export function autoRegisterRepo(db: Database.Database): Repo | null {
   const existing = getRepoByPath(db, repoPath)
   if (existing) return existing
 
-  const name = basename(repoPath)
+  let name = basename(repoPath)
+
+  // Handle name collision: append parent dir if name already exists
+  const nameConflict = getRepoByName(db, name)
+  if (nameConflict) {
+    const parts = repoPath.split('/')
+    const parent = parts.length >= 2 ? parts[parts.length - 2] : 'repo'
+    name = `${parent}-${name}`
+  }
+
   return insertRepo(db, name, repoPath)
 }

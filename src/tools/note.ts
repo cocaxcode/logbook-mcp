@@ -9,7 +9,7 @@ export function registerNoteTool(server: McpServer): void {
     'logbook_note',
     'Añade una nota al logbook. Topics: feature, fix, chore, idea, decision, blocker. Si no se pasa topic, queda sin categorizar.',
     {
-      content: z.string().describe('Contenido de la nota'),
+      content: z.string().min(1).max(5000).describe('Contenido de la nota'),
       topic: z
         .string()
         .optional()
@@ -43,7 +43,7 @@ export function registerNoteTool(server: McpServer): void {
       } catch (err: unknown) {
         return {
           isError: true,
-          content: [{ type: 'text' as const, text: `Error creando nota: ${(err as Error).message}` }],
+          content: [{ type: 'text' as const, text: `Error creando nota: ${err instanceof Error ? err.message : String(err)}` }],
         }
       }
     },

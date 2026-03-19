@@ -34,11 +34,3 @@ export function closeDb(): void {
     db = null
   }
 }
-
-export function getTestDb(): Database.Database {
-  const testDb = new Database(':memory:')
-  testDb.pragma('foreign_keys = ON')
-  testDb.exec(SCHEMA_SQL)
-  testDb.exec(SEED_TOPICS_SQL)
-  return testDb
-}

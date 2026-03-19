@@ -93,7 +93,7 @@ export function registerLogTool(server: McpServer): void {
       } catch (err: unknown) {
         return {
           isError: true,
-          content: [{ type: 'text' as const, text: `Error: ${(err as Error).message}` }],
+          content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
         }
       }
     },

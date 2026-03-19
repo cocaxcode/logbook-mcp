@@ -14,6 +14,8 @@ export function registerTodoAddTool(server: McpServer): void {
     {
       content: z
         .string()
+        .min(1)
+        .max(2000)
         .optional()
         .describe('Contenido del TODO (para crear uno solo)'),
       topic: z
@@ -27,13 +29,14 @@ export function registerTodoAddTool(server: McpServer): void {
       items: z
         .array(
           z.object({
-            content: z.string().describe('Contenido del TODO'),
+            content: z.string().min(1).max(2000).describe('Contenido del TODO'),
             topic: z.string().optional().describe('Topic'),
             priority: priorityEnum.optional().default('normal').describe('Prioridad'),
           }),
         )
+        .max(50)
         .optional()
-        .describe('Array de TODOs para crear varios a la vez'),
+        .describe('Array de TODOs para crear varios a la vez (max 50)'),
     },
     async ({ content, topic, priority, items }) => {
       try {
@@ -95,7 +98,7 @@ export function registerTodoAddTool(server: McpServer): void {
       } catch (err: unknown) {
         return {
           isError: true,
-          content: [{ type: 'text' as const, text: `Error creando TODO: ${(err as Error).message}` }],
+          content: [{ type: 'text' as const, text: `Error creando TODO: ${err instanceof Error ? err.message : String(err)}` }],
         }
       }
     },

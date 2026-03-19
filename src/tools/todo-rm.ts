@@ -30,7 +30,7 @@ export function registerTodoRmTool(server: McpServer): void {
       } catch (err: unknown) {
         return {
           isError: true,
-          content: [{ type: 'text' as const, text: `Error eliminando TODOs: ${(err as Error).message}` }],
+          content: [{ type: 'text' as const, text: `Error eliminando TODOs: ${err instanceof Error ? err.message : String(err)}` }],
         }
       }
     },

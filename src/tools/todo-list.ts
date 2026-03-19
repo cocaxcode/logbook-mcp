@@ -107,7 +107,7 @@ export function registerTodoListTool(server: McpServer): void {
       } catch (err: unknown) {
         return {
           isError: true,
-          content: [{ type: 'text' as const, text: `Error listando TODOs: ${(err as Error).message}` }],
+          content: [{ type: 'text' as const, text: `Error listando TODOs: ${err instanceof Error ? err.message : String(err)}` }],
         }
       }
     },

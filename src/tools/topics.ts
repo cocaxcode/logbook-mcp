@@ -14,10 +14,14 @@ export function registerTopicsTool(server: McpServer): void {
         .describe('Accion: list (ver temas) o add (crear tema custom)'),
       name: z
         .string()
+        .min(1)
+        .max(50)
+        .regex(/^[a-z0-9-]+$/, 'Solo letras minusculas, numeros y guiones')
         .optional()
         .describe('Nombre del nuevo tema (solo para action=add, lowercase, sin espacios)'),
       description: z
         .string()
+        .max(200)
         .optional()
         .describe('Descripcion del nuevo tema (solo para action=add)'),
     },
@@ -33,8 +37,7 @@ export function registerTopicsTool(server: McpServer): void {
             }
           }
 
-          const normalized = name.toLowerCase().replace(/\s+/g, '-')
-          const topic = insertTopic(db, normalized, description)
+          const topic = insertTopic(db, name, description)
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(topic) }],
           }
@@ -47,7 +50,7 @@ export function registerTopicsTool(server: McpServer): void {
       } catch (err: unknown) {
         return {
           isError: true,
-          content: [{ type: 'text' as const, text: `Error: ${(err as Error).message}` }],
+          content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }],
         }
       }
     },

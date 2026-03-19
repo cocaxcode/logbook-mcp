@@ -223,6 +223,8 @@ export function updateTodoStatus(
   ids: number[],
   status: 'pending' | 'done',
 ): TodoWithMeta[] {
+  if (ids.length === 0) return []
+
   const completedAt = status === 'done' ? new Date().toISOString() : null
   const placeholders = ids.map(() => '?').join(',')
 
@@ -274,6 +276,8 @@ export function deleteTodos(
   db: Database.Database,
   ids: number[],
 ): number[] {
+  if (ids.length === 0) return []
+
   const placeholders = ids.map(() => '?').join(',')
   const existing = db
     .prepare(`SELECT id FROM todos WHERE id IN (${placeholders})`)
@@ -402,10 +406,14 @@ export function getCompletedTodos(
 // ── Utils ──
 
 function sanitizeFts(query: string): string {
-  // Wrap each word in double quotes for literal matching
-  return query
+  const words = query
+    .replace(/\0/g, '')
     .split(/\s+/)
     .filter(Boolean)
-    .map((word) => `"${word.replace(/"/g, '')}"`)
-    .join(' ')
+    .map((word) => word.replace(/"/g, ''))
+    .filter(Boolean)
+
+  if (words.length === 0) return '""'
+
+  return words.map((word) => `"${word}"`).join(' ')
 }

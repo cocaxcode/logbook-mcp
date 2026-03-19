@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import type { CodeTodo } from '../types.js'
 
 const TAG_TO_TOPIC: Record<string, string> = {
@@ -10,8 +10,9 @@ const TAG_TO_TOPIC: Record<string, string> = {
 
 export function scanCodeTodos(repoPath: string): CodeTodo[] {
   try {
-    const output = execSync(
-      `git -C "${repoPath}" grep -n -E "(TODO|FIXME|HACK|BUG):" --no-color`,
+    const output = execFileSync(
+      'git',
+      ['-C', repoPath, 'grep', '-n', '-E', '(TODO|FIXME|HACK|BUG):', '--no-color'],
       { encoding: 'utf-8', timeout: 10000, stdio: ['pipe', 'pipe', 'pipe'] },
     )
     return parseGitGrepOutput(output)

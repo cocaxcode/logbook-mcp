@@ -14,7 +14,7 @@ export function registerSearchTool(server: McpServer): void {
     'logbook_search',
     'Busqueda full-text en notas y TODOs. Usa FTS5 para busqueda rapida.',
     {
-      query: z.string().describe('Texto a buscar'),
+      query: z.string().min(1).max(500).describe('Texto a buscar'),
       type: z
         .enum(['all', 'notes', 'todos'])
         .optional()
@@ -86,7 +86,7 @@ export function registerSearchTool(server: McpServer): void {
       } catch (err: unknown) {
         return {
           isError: true,
-          content: [{ type: 'text' as const, text: `Error buscando: ${(err as Error).message}` }],
+          content: [{ type: 'text' as const, text: `Error buscando: ${err instanceof Error ? err.message : String(err)}` }],
         }
       }
     },
