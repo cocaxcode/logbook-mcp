@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { getDb } from '../db/connection.js'
-import { getAllTopics, getTopicByName, insertTodo } from '../db/queries.js'
+import { insertTodo, resolveTopicId } from '../db/queries.js'
 import { autoRegisterRepo } from '../git/detect-repo.js'
 import type { TodoAddItem, TodoWithMeta } from '../types.js'
 
@@ -61,21 +61,7 @@ export function registerTodoAddTool(server: McpServer): void {
         const results: TodoWithMeta[] = []
 
         for (const item of todoItems) {
-          let topicId: number | null = null
-          if (item.topic) {
-            const topicRow = getTopicByName(db, item.topic)
-            if (!topicRow) {
-              const available = getAllTopics(db)
-              return {
-                isError: true,
-                content: [{
-                  type: 'text' as const,
-                  text: `Topic "${item.topic}" no existe. Disponibles: ${available.map((t) => t.name).join(', ')}`,
-                }],
-              }
-            }
-            topicId = topicRow.id
-          }
+          const topicId = item.topic ? resolveTopicId(db, item.topic) : null
 
           const todo = insertTodo(
             db,

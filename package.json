@@ -1,6 +1,6 @@
 {
   "name": "@cocaxcode/logbook-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "MCP server — cuaderno de bitácora del developer. Notas, TODOs y code TODOs sin salir de tu AI.",
   "type": "module",
   "bin": {

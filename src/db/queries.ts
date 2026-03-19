@@ -403,6 +403,25 @@ export function getCompletedTodos(
     .all(...params) as TodoWithMeta[]
 }
 
+// ── Topic resolution (auto-create) ──
+
+export function resolveTopicId(
+  db: Database.Database,
+  name: string,
+): number {
+  const existing = getTopicByName(db, name)
+  if (existing) return existing.id
+
+  const normalized = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+  if (!normalized) return getTopicByName(db, 'chore')!.id
+
+  const existingNorm = getTopicByName(db, normalized)
+  if (existingNorm) return existingNorm.id
+
+  const created = insertTopic(db, normalized)
+  return created.id
+}
+
 // ── Code TODO Sync ──
 
 export interface CodeTodoSnapshot {

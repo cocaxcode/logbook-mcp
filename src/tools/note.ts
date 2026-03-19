@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { getDb } from '../db/connection.js'
-import { getAllTopics, getTopicByName, insertNote } from '../db/queries.js'
+import { insertNote, resolveTopicId } from '../db/queries.js'
 import { autoRegisterRepo } from '../git/detect-repo.js'
 
 export function registerNoteTool(server: McpServer): void {
@@ -20,21 +20,7 @@ export function registerNoteTool(server: McpServer): void {
         const db = getDb()
         const repo = autoRegisterRepo(db)
 
-        let topicId: number | null = null
-        if (topic) {
-          const topicRow = getTopicByName(db, topic)
-          if (!topicRow) {
-            const available = getAllTopics(db)
-            return {
-              isError: true,
-              content: [{
-                type: 'text' as const,
-                text: `Topic "${topic}" no existe. Disponibles: ${available.map((t) => t.name).join(', ')}`,
-              }],
-            }
-          }
-          topicId = topicRow.id
-        }
+        const topicId = topic ? resolveTopicId(db, topic) : null
 
         const note = insertNote(db, repo?.id ?? null, topicId, content)
         return {
