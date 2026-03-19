@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS todos (
   status TEXT NOT NULL DEFAULT 'pending',
   priority TEXT NOT NULL DEFAULT 'normal',
   remind_at TEXT,
+  remind_pattern TEXT,
+  remind_last_done TEXT,
   completed_at TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

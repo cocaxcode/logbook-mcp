@@ -37,6 +37,8 @@ export interface Todo {
   status: 'pending' | 'done'
   priority: Priority
   remind_at: string | null
+  remind_pattern: string | null
+  remind_last_done: string | null
   completed_at: string | null
   created_at: string
 }
@@ -93,4 +95,5 @@ export interface TodoAddItem {
   topic?: string
   priority?: Priority
   remind_at?: string
+  remind_pattern?: string
 }

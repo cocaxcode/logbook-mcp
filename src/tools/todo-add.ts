@@ -29,7 +29,11 @@ export function registerTodoAddTool(server: McpServer): void {
       remind_at: z
         .string()
         .optional()
-        .describe('Fecha recordatorio (YYYY-MM-DD). Se asigna topic "reminder" automaticamente.'),
+        .describe('Fecha recordatorio unica (YYYY-MM-DD)'),
+      remind_pattern: z
+        .string()
+        .optional()
+        .describe('Patron recurrente: daily, weekdays, weekly:2 (martes), weekly:1,3 (lun+mie), monthly:1 (dia 1), monthly:1,15'),
       items: z
         .array(
           z.object({
@@ -37,13 +41,14 @@ export function registerTodoAddTool(server: McpServer): void {
             topic: z.string().optional().describe('Topic'),
             priority: priorityEnum.optional().default('normal').describe('Prioridad'),
             remind_at: z.string().optional().describe('Fecha recordatorio (YYYY-MM-DD)'),
+            remind_pattern: z.string().optional().describe('Patron recurrente'),
           }),
         )
         .max(50)
         .optional()
         .describe('Array de TODOs para crear varios a la vez (max 50)'),
     },
-    async ({ content, topic, priority, remind_at, items }) => {
+    async ({ content, topic, priority, remind_at, remind_pattern, items }) => {
       try {
         if (!content && (!items || items.length === 0)) {
           return {
@@ -61,13 +66,14 @@ export function registerTodoAddTool(server: McpServer): void {
 
         const todoItems: TodoAddItem[] = items
           ? items
-          : [{ content: content!, topic, priority: priority ?? 'normal', remind_at }]
+          : [{ content: content!, topic, priority: priority ?? 'normal', remind_at, remind_pattern }]
 
         const results: TodoWithMeta[] = []
 
         for (const item of todoItems) {
           // Auto-assign topic "reminder" if remind_at is set and no topic
-          const effectiveTopic = item.remind_at && !item.topic ? 'reminder' : item.topic
+          const hasReminder = item.remind_at || item.remind_pattern
+          const effectiveTopic = hasReminder && !item.topic ? 'reminder' : item.topic
           const topicId = effectiveTopic ? resolveTopicId(db, effectiveTopic) : null
 
           const todo = insertTodo(
@@ -77,6 +83,7 @@ export function registerTodoAddTool(server: McpServer): void {
             item.content,
             item.priority ?? 'normal',
             item.remind_at,
+            item.remind_pattern,
           )
           results.push(todo)
         }

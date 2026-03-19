@@ -7,33 +7,27 @@ export function registerRemindersResource(server: McpServer): void {
     'reminders',
     'logbook://reminders',
     {
-      description: 'Recordatorios pendientes para hoy y atrasados, agrupados por proyecto',
+      description: 'Recordatorios pendientes para hoy y atrasados, agrupados por proyecto. Vacio si no hay ninguno.',
       mimeType: 'application/json',
     },
     async (uri) => {
       try {
         const db = getDb()
-        const { today, overdue } = getDueReminders(db)
+        const result = getDueReminders(db)
 
-        const hasReminders = today.length > 0 || overdue.length > 0
+        // No reminders → empty content (no tokens wasted)
+        if (!result) {
+          return { contents: [] }
+        }
 
         return {
           contents: [{
             uri: uri.href,
-            text: JSON.stringify({
-              hasReminders,
-              today,
-              overdue,
-            }),
+            text: JSON.stringify(result),
           }],
         }
       } catch {
-        return {
-          contents: [{
-            uri: uri.href,
-            text: JSON.stringify({ hasReminders: false, today: [], overdue: [] }),
-          }],
-        }
+        return { contents: [] }
       }
     },
   )

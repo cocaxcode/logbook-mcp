@@ -157,11 +157,12 @@ export function insertTodo(
   content: string,
   priority: string = 'normal',
   remindAt?: string,
+  remindPattern?: string,
 ): TodoWithMeta {
   const stmt = db.prepare(
-    'INSERT INTO todos (repo_id, topic_id, content, priority, remind_at) VALUES (?, ?, ?, ?, ?)',
+    'INSERT INTO todos (repo_id, topic_id, content, priority, remind_at, remind_pattern) VALUES (?, ?, ?, ?, ?, ?)',
   )
-  const result = stmt.run(repoId, topicId, content, priority, remindAt ?? null)
+  const result = stmt.run(repoId, topicId, content, priority, remindAt ?? null, remindPattern ?? null)
   return db
     .prepare(`${TODO_WITH_META_SQL} WHERE t.id = ?`)
     .get(result.lastInsertRowid) as TodoWithMeta
@@ -414,27 +415,80 @@ export interface ReminderGroup {
 export function getDueReminders(db: Database.Database): {
   today: ReminderGroup[]
   overdue: ReminderGroup[]
-} {
+  recurring: ReminderGroup[]
+} | null {
   const now = new Date()
   const today = now.toISOString().split('T')[0]
   const tomorrow = new Date(now.getTime() + 86400000).toISOString().split('T')[0]
 
+  // Fixed date reminders for today
   const todayItems = db
     .prepare(
       `${TODO_WITH_META_SQL} WHERE t.status = 'pending' AND t.remind_at >= ? AND t.remind_at < ? ORDER BY t.remind_at`,
     )
     .all(today, tomorrow) as TodoWithMeta[]
 
+  // Overdue fixed date reminders
   const overdueItems = db
     .prepare(
-      `${TODO_WITH_META_SQL} WHERE t.status = 'pending' AND t.remind_at < ? ORDER BY t.remind_at`,
+      `${TODO_WITH_META_SQL} WHERE t.status = 'pending' AND t.remind_at IS NOT NULL AND t.remind_at < ? AND t.remind_pattern IS NULL ORDER BY t.remind_at`,
     )
     .all(today) as TodoWithMeta[]
+
+  // Recurring reminders: check if pattern matches today
+  const recurringAll = db
+    .prepare(
+      `${TODO_WITH_META_SQL} WHERE t.remind_pattern IS NOT NULL AND (t.remind_last_done IS NULL OR t.remind_last_done < ?)`,
+    )
+    .all(today) as TodoWithMeta[]
+
+  const recurringToday = recurringAll.filter((r) => matchesPattern(r.remind_pattern!, now))
+
+  const hasAny = todayItems.length > 0 || overdueItems.length > 0 || recurringToday.length > 0
+  if (!hasAny) return null
 
   return {
     today: groupByRepo(todayItems),
     overdue: groupByRepo(overdueItems),
+    recurring: groupByRepo(recurringToday),
   }
+}
+
+// Mark recurring reminder as done for today (resets next matching day)
+export function ackRecurringReminder(db: Database.Database, id: number): void {
+  const today = new Date().toISOString().split('T')[0]
+  db.prepare('UPDATE todos SET remind_last_done = ? WHERE id = ?').run(today, id)
+}
+
+/**
+ * Pattern matching for recurring reminders:
+ *   daily              → every day
+ *   weekdays           → Monday to Friday
+ *   weekly:1           → every Monday (1=Mon, 7=Sun)
+ *   weekly:2,4         → every Tuesday and Thursday
+ *   monthly:1          → 1st of each month
+ *   monthly:1,15       → 1st and 15th of each month
+ */
+function matchesPattern(pattern: string, date: Date): boolean {
+  const dayOfWeek = date.getDay() // 0=Sun, 1=Mon, ..., 6=Sat
+  const dayOfMonth = date.getDate()
+
+  if (pattern === 'daily') return true
+
+  if (pattern === 'weekdays') return dayOfWeek >= 1 && dayOfWeek <= 5
+
+  if (pattern.startsWith('weekly:')) {
+    const days = pattern.slice(7).split(',').map(Number)
+    // Convert: 1=Mon..7=Sun to JS 0=Sun..6=Sat
+    return days.some((d) => (d % 7) === dayOfWeek)
+  }
+
+  if (pattern.startsWith('monthly:')) {
+    const days = pattern.slice(8).split(',').map(Number)
+    return days.includes(dayOfMonth)
+  }
+
+  return false
 }
 
 function groupByRepo(items: TodoWithMeta[]): ReminderGroup[] {
