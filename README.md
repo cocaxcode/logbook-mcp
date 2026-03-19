@@ -2,7 +2,7 @@
   <h1 align="center">@cocaxcode/logbook-mcp</h1>
   <p align="center">
     <strong>Your developer logbook, always one sentence away.</strong><br/>
-    Notes &middot; TODOs &middot; Code TODOs &middot; Full-text search &middot; Zero config
+    Notes &middot; TODOs &middot; Reminders &middot; Code TODOs &middot; Full-text search &middot; Zero config
   </p>
 </p>
 
@@ -12,7 +12,7 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License" /></a>
   <img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
   <img src="https://img.shields.io/badge/tools-9-blueviolet?style=flat-square" alt="9 tools" />
-  <img src="https://img.shields.io/badge/tests-56-brightgreen?style=flat-square" alt="56 tests" />
+  <img src="https://img.shields.io/badge/tests-60-brightgreen?style=flat-square" alt="60 tests" />
 </p>
 
 <p align="center">
@@ -20,6 +20,7 @@
   <a href="#installation">Installation</a> &middot;
   <a href="#just-talk-to-it">Usage</a> &middot;
   <a href="#features">Features</a> &middot;
+  <a href="#reminders">Reminders</a> &middot;
   <a href="#tool-reference">Tool Reference</a> &middot;
   <a href="#storage">Storage</a> &middot;
   <a href="#contributing">Contributing</a>
@@ -35,16 +36,21 @@ You make decisions every day. Why JWT over sessions? Why Redis over Memcached? W
 
 Your TODOs live in 5 different places: Jira, sticky notes, code comments, your head, and that Slack message you'll never find again.
 
-**logbook-mcp** is a developer logbook that lives inside your AI assistant. Notes, TODOs, and code TODOs — all queryable with natural language, without ever leaving your workflow.
+**logbook-mcp** is a developer logbook that lives inside your AI assistant. Notes, TODOs, reminders, and code TODOs — all queryable with natural language, without ever leaving your workflow.
 
 ### Why logbook-mcp?
 
-- **Zero context switching** — don't leave Claude/Cursor to open another app
-- **Zero config** — auto-detects your project, creates the DB on first use
-- **Zero AI costs** — returns raw data, your AI client does the formatting
-- **Captures what git doesn't** — decisions, ideas, blockers, and context
-- **Code TODOs included** — scans your source for `TODO/FIXME/HACK/BUG` automatically
-- **Full-text search** — FTS5 powered, finds anything instantly
+| Feature | Benefit |
+|---------|---------|
+| **Zero context switching** | Don't leave Claude/Cursor to open another app |
+| **Zero config** | Auto-detects your project, creates the DB on first use |
+| **Zero AI costs** | Returns raw data, your AI client does the formatting |
+| **Captures what git doesn't** | Decisions, ideas, blockers, reminders, and context |
+| **Code TODOs included** | Scans your source for `TODO/FIXME/HACK/BUG` automatically |
+| **Auto-sync code TODOs** | Detects when code TODOs disappear (you fixed them) |
+| **Full-text search** | FTS5 powered, finds anything instantly |
+| **Recurring reminders** | Daily, weekly, monthly patterns with auto-ack |
+| **Multi-project** | One database, all your projects, query per-project or globally |
 
 ---
 
@@ -151,31 +157,42 @@ Add to `.gemini/settings.json`:
 
 No commands to memorize. Just tell your AI what you need:
 
-### Notes — capture decisions and context
+### Notes — capture what matters
 
 | You say | What happens |
 |---------|-------------|
-| *"I decided to use JWT instead of sessions for scalability"* | `logbook_note` saves it as a **decision** in the current project |
-| *"Note: Redis doesn't support nested JSON queries natively"* | `logbook_note` saves it as a **learning** for future reference |
-| *"The CI pipeline is failing due to a timeout in integration tests"* | `logbook_note` captures the **blocker** so standup reports include it |
+| *"I decided to use JWT instead of sessions for scalability"* | Saved as **decision** — retrievable months from now |
+| *"Note: Redis doesn't support nested JSON queries natively"* | Saved as a note for future reference |
+| *"The CI is failing due to a timeout in integration tests"* | Captured as **blocker** — shows up in standups |
+| *"We could add WebSocket support for real-time updates"* | Saved as **idea** — won't get lost in Slack |
 
 ### TODOs — your checklist, always at hand
 
 | You say | What happens |
 |---------|-------------|
-| *"TODO: implement email validation for registration"* | `logbook_todo_add` creates a TODO, AI infers topic **feature** |
-| *"Add these TODOs: fix token refresh. update dependencies. add rate limiting"* | `logbook_todo_add` creates **3 TODOs** at once, each with its inferred topic |
-| *"Mark 5 and 8 as done"* | `logbook_todo_done` marks both TODOs as completed |
-| *"What's pending?"* | `logbook_todo_list` shows all TODOs grouped by topic, including code TODOs |
+| *"TODO: implement email validation"* | Created with topic **feature** (AI infers it) |
+| *"Add these: fix token refresh. update deps. add rate limiting"* | **3 TODOs** created at once, each categorized |
+| *"Mark 5 and 8 as done"* | Both marked as completed |
+| *"What's pending?"* | All TODOs grouped by topic, including code TODOs |
+| *"What's pending across all projects?"* | Global view of everything |
 
-### Search and history
+### Reminders — never forget
 
 | You say | What happens |
 |---------|-------------|
-| *"What did I do yesterday?"* | `logbook_log` returns notes + completed TODOs from yesterday |
-| *"Search everything about auth"* | `logbook_search` finds notes and TODOs matching "auth" via FTS5 |
-| *"Show me all decisions this month"* | `logbook_log` filters by topic **decision** and date range |
-| *"What's pending across all projects?"* | `logbook_todo_list` with global scope shows everything |
+| *"Remind me tomorrow to deploy"* | One-time reminder for tomorrow |
+| *"Remind me every Tuesday to review PRs"* | Recurring weekly reminder |
+| *"Remind me the 1st of each month to renew certificates"* | Monthly recurring reminder |
+| *"Remind me on weekdays to check the CI"* | Monday to Friday reminder |
+
+### Search — find anything, instantly
+
+| You say | What happens |
+|---------|-------------|
+| *"What did I do yesterday?"* | Notes + completed TODOs from yesterday |
+| *"Search everything about auth"* | FTS5 search across all notes and TODOs |
+| *"Show me all decisions this month"* | Filtered by topic **decision** and date range |
+| *"Why did we choose JWT?"* | Finds the decision note, even months later |
 
 ---
 
@@ -186,91 +203,254 @@ No commands to memorize. Just tell your AI what you need:
 logbook-mcp auto-detects which git project you're in. No setup, no config files:
 
 ```
-Working in ~/projects/my-api/
-  → Notes and TODOs automatically linked to "my-api"
+You're in ~/projects/my-api/
+  → "What's pending?" shows only my-api TODOs
 
-Working in ~/projects/my-frontend/
-  → Separate context, same database
+You're in ~/projects/my-frontend/
+  → Same question shows only my-frontend TODOs
 
-Ask for "all projects"
+You ask "all projects"
   → Global view across everything
 ```
 
-### Notes with topics
+### 7 built-in topics
 
-6 built-in topics that cover every scenario:
+Every note, TODO, and reminder is categorized. The AI infers the topic automatically, or you can specify it:
 
-| Topic | What it captures | From commits |
-|-------|-----------------|--------------|
-| **feature** | New functionality | `feat:` |
-| **fix** | Bug fixes | `fix:` |
-| **chore** | Maintenance, refactoring, CI/CD | `refactor:` `docs:` `ci:` `build:` `test:` |
-| **idea** | Future proposals, explorations | — |
-| **decision** | Architecture choices with reasoning | — |
-| **blocker** | Things blocking your progress | — |
+| Topic | Purpose | Auto-mapped from commits | AI infers from |
+|-------|---------|:------------------------:|----------------|
+| **feature** | New functionality | `feat:` | "implement", "add", "create" |
+| **fix** | Bug fixes | `fix:` | "fix", "bug", "broken" |
+| **chore** | Maintenance, CI/CD, refactoring | `refactor:` `docs:` `ci:` `build:` `test:` | "update", "clean", "refactor" |
+| **idea** | Future proposals | — | "maybe", "could", "explore" |
+| **decision** | Architecture choices | — | "decided", "chose", "going with" |
+| **blocker** | Things blocking progress | — | "blocked", "can't", "waiting" |
+| **reminder** | Time-based reminders | — | Auto-assigned when `remind_at` is set |
 
-Need more? Create custom topics:
+Topics are auto-created when the AI uses one that doesn't exist. You can also create custom topics:
 
 ```
-"Create a topic called 'security' for security-related items"
-→ logbook_topics(action: 'add', name: 'security')
+"Create a topic called 'security'"
+→ Done. Now you can tag notes and TODOs with 'security'.
 ```
 
 ### TODOs as checklist
 
-Manual TODOs with priority levels (`low`, `normal`, `high`, `urgent`):
+Manual TODOs with priority levels:
 
 ```
-feature (3)
+📋 feature (3)
   ☐ #12 Implement email validation
   ☐ #15 [HIGH] Dynamic permissions endpoint
   ☑ #9  Google OAuth login (completed Mar 17)
 
-fix (1)
+📋 fix (1)
   ☐ #8  [URGENT] Token doesn't refresh
 
-blocker (1)
+📋 blocker (1)
   ☐ #20 Resolve CI timeout
 ```
 
-### Code TODOs
+### Code TODOs — live from your source
 
-Your `TODO`, `FIXME`, `HACK`, and `BUG` comments in source code appear alongside manual TODOs:
+Your `TODO`, `FIXME`, `HACK`, and `BUG` comments appear alongside manual TODOs:
 
 ```
-feature (2)
+📋 feature (2)
   ☐ #12 [manual] Implement email validation
   📄 [code]  TODO: add OAuth support — src/auth/service.ts:45
 
-fix (2)
+📋 fix (3)
   ☐ #8  [manual] Token doesn't refresh
   📄 [code]  FIXME: handle null case — src/users/controller.ts:78
   📄 [code]  BUG: race condition — src/chat/gateway.ts:112
 
-chore (1)
+📋 chore (1)
   📄 [code]  HACK: proxy workaround — src/middleware/cors.ts:23
 ```
 
-Code TODOs are scanned live via `git grep` — they disappear when you fix them.
-
-### Full-text search (FTS5)
-
-Search across all notes and TODOs instantly:
-
-```
-"Search auth"
-→ Finds notes about JWT decisions, TODOs about auth endpoints,
-  and anything mentioning "auth" across all projects
-```
+**Auto-sync:** When you fix a code TODO and it disappears from the source, logbook detects it and marks it as resolved. No action needed — it happens automatically when you list your TODOs.
 
 ### Batch operations
-
-Create, complete, or delete multiple items at once:
 
 ```
 "Add: validate email. fix token. update deps"     → 3 TODOs created
 "Mark 5, 8, and 12 as done"                       → 3 TODOs completed
 "Delete TODOs 3 and 7"                             → 2 TODOs removed
+```
+
+### Full-text search (FTS5)
+
+Instant search across all notes and TODOs, powered by SQLite FTS5:
+
+```
+"Search auth"
+→ Finds notes about JWT decisions, TODOs about auth endpoints,
+  and anything mentioning "auth" — across all projects if you want
+```
+
+---
+
+## Reminders
+
+logbook-mcp supports both one-time and recurring reminders.
+
+### One-time reminders
+
+```
+"Remind me tomorrow to deploy to production"
+→ remind_at: "2026-03-20", topic: "reminder"
+
+"Remind me on March 25 to review the quarterly report"
+→ remind_at: "2026-03-25", topic: "reminder"
+```
+
+### Recurring reminders
+
+| You say | Pattern | When it fires |
+|---------|---------|---------------|
+| *"Remind me every day to check CI"* | `daily` | Every day |
+| *"Remind me on weekdays to do standup"* | `weekdays` | Monday to Friday |
+| *"Remind me every Tuesday to review PRs"* | `weekly:2` | Every Tuesday |
+| *"Remind me Mondays and Wednesdays to sync"* | `weekly:1,3` | Mon + Wed |
+| *"Remind me the 1st of each month to renew certs"* | `monthly:1` | 1st of month |
+| *"Remind me the 1st and 15th to check billing"* | `monthly:1,15` | 1st + 15th |
+
+### How reminders behave
+
+```
+Tuesday 9:00 — you open Claude
+  ⏰ Reminder: review PRs (weekly, every Tuesday)
+  → Shows once, auto-acknowledged for today
+
+Tuesday 14:00 — you open Claude again
+  → Nothing. Already shown today.
+
+Wednesday — you open Claude
+  → Nothing. Not a Tuesday.
+
+Next Tuesday — you open Claude
+  → ⏰ Reminder: review PRs (shows again)
+```
+
+**To stop a recurring reminder permanently:** delete it with `logbook_todo_rm`.
+
+### Overdue reminders
+
+One-time reminders that weren't completed show as overdue:
+
+```
+⏰ Reminders for today (Mar 19)
+  my-api: deploy to production
+
+⚠️ Overdue
+  my-frontend: fix dark mode (was due Mar 17 — 2 days late)
+```
+
+### MCP Resource: automatic reminder delivery
+
+logbook-mcp exposes a **Resource** (`logbook://reminders`) that MCP clients can load automatically when starting a session. This means your AI tells you about pending reminders **without you asking**.
+
+#### Resource compatibility
+
+| Client | Resources support | Reminders behavior |
+|--------|:-----------------:|-------------------|
+| **Claude Code** | ✅ Yes | Reminders shown automatically on session start |
+| **Claude Desktop** | ✅ Yes | Reminders shown automatically on session start |
+| **Cursor** | ❌ No | Ask *"any reminders?"* — works via `logbook_todo_list` |
+| **Windsurf** | ❌ No | Ask *"any reminders?"* — works via `logbook_todo_list` |
+| **VS Code + Copilot** | ⚠️ Partial | Depends on MCP extension used |
+| **Codex CLI** | ❌ No | Ask *"any reminders?"* — works via `logbook_todo_list` |
+| **Gemini CLI** | ❌ No | Ask *"any reminders?"* — works via `logbook_todo_list` |
+
+> **Important:** Even without Resource support, reminders always work. You just need to ask for them instead of getting them automatically. All 9 tools work identically across all MCP clients.
+
+---
+
+## A Day With logbook-mcp
+
+Here's what a typical day looks like:
+
+### Morning — start your day
+
+```
+You: "What did I do yesterday?"
+
+Claude: Yesterday on my-api:
+  📝 [decision] Chose sliding window for rate limiting over fixed window
+  ☑ #8 Fixed token refresh bug
+  ☑ #12 Implemented email validation
+  📄 [resolved] FIXME in src/users/controller.ts (handle null case)
+
+You: "What's pending?"
+
+Claude: my-api — 4 pending:
+  📋 feature
+    ☐ #15 [HIGH] Dynamic permissions endpoint
+    📄 TODO: add OAuth — src/auth/service.ts:45
+  📋 chore
+    ☐ #21 Update dependencies
+  📋 reminder
+    ⏰ #25 Review PRs (recurring: every Tuesday)
+```
+
+### Working — capture as you go
+
+```
+You: "I decided to use Redis for session cache because
+      Memcached doesn't support key expiration callbacks"
+
+Claude: ✅ Note saved [decision] in my-api
+
+You: "TODO: add rate limit headers to API responses.
+      TODO: document the new permissions endpoint.
+      TODO: fix CORS for mobile app"
+
+Claude: ✅ 3 TODOs created:
+  ☐ #26 [feature] Add rate limit headers
+  ☐ #27 [chore] Document permissions endpoint
+  ☐ #28 [fix] Fix CORS for mobile app
+
+You: "Remind me Friday to deploy the permissions update"
+
+Claude: ✅ Reminder set for 2026-03-21 [reminder]
+```
+
+### End of day — wrap up
+
+```
+You: "Mark 15, 26, and 28 as done"
+
+Claude: ✅ 3 TODOs completed
+
+You: "What did I do today?"
+
+Claude: Today on my-api:
+  📝 [decision] Redis for session cache (expiration callbacks)
+  ☑ #15 Dynamic permissions endpoint
+  ☑ #26 Rate limit headers
+  ☑ #28 CORS fix for mobile
+  📄 [resolved] HACK in src/middleware/cors.ts (removed workaround)
+```
+
+### Weekly review — see the big picture
+
+```
+You: "Summary of this week across all projects"
+
+Claude:
+  my-api: 3 notes, 8 TODOs completed, 4 pending
+  my-frontend: 1 note, 3 TODOs completed, 2 pending
+  my-docs: 0 notes, 1 TODO completed, 0 pending
+
+You: "Search everything about auth across all projects"
+
+Claude: 12 results:
+  [note] my-api — Decided JWT over sessions (Mar 12)
+  [note] my-api — Redis for session cache (Mar 19)
+  [todo] my-api — ☐ Add OAuth support
+  [todo] my-frontend — ☑ Auth redirect fix (completed Mar 15)
+  ...
 ```
 
 ---
@@ -283,12 +463,13 @@ Create, complete, or delete multiple items at once:
 | **Notes** | `logbook_note` | 1 |
 | **TODOs** | `logbook_todo_add` `logbook_todo_list` `logbook_todo_done` `logbook_todo_edit` `logbook_todo_rm` | 5 |
 | **Config** | `logbook_topics` | 1 |
-| **Total** | | **9** |
+| **Resource** | `logbook://reminders` | — |
+| **Total** | | **9 tools + 1 resource** |
 
 <details>
 <summary><strong>logbook_log</strong> — Activity for a period</summary>
 
-Shows notes and completed TODOs for a time range.
+Shows notes, completed TODOs, and resolved code TODOs for a time range.
 
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -305,8 +486,8 @@ Shows notes and completed TODOs for a time range.
 
 | Param | Type | Required | Description |
 |-------|------|----------|-------------|
-| `content` | string | Yes | Note content |
-| `topic` | string | No | Topic name (AI can infer it) |
+| `content` | string | Yes | Note content (max 5000 chars) |
+| `topic` | string | No | Topic name — AI infers it, or auto-created if new |
 </details>
 
 <details>
@@ -314,10 +495,12 @@ Shows notes and completed TODOs for a time range.
 
 | Param | Type | Description |
 |-------|------|-------------|
-| `content` | string | Single TODO content |
-| `topic` | string | Topic for single TODO |
+| `content` | string | Single TODO content (max 2000 chars) |
+| `topic` | string | Topic — auto-inferred or auto-created |
 | `priority` | `low` `normal` `high` `urgent` | Priority (default: normal) |
-| `items` | array | Multiple TODOs: `[{content, topic?, priority?}]` |
+| `remind_at` | `YYYY-MM-DD` | One-time reminder date |
+| `remind_pattern` | string | Recurring: `daily`, `weekdays`, `weekly:N`, `monthly:N` |
+| `items` | array | Multiple TODOs: `[{content, topic?, priority?, remind_at?, remind_pattern?}]` (max 50) |
 </details>
 
 <details>
@@ -340,6 +523,8 @@ Shows notes and completed TODOs for a time range.
 |-------|------|-------------|
 | `ids` | number or number[] | ID(s) to mark |
 | `undo` | boolean | If true, sets back to pending (default: false) |
+
+For recurring reminders, "done" means acknowledged for today. It will reappear on the next matching day.
 </details>
 
 <details>
@@ -349,7 +534,7 @@ Shows notes and completed TODOs for a time range.
 |-------|------|-------------|
 | `id` | number | TODO ID to edit |
 | `content` | string | New content |
-| `topic` | string | New topic |
+| `topic` | string | New topic (auto-created if new) |
 | `priority` | `low` `normal` `high` `urgent` | New priority |
 </details>
 
@@ -358,7 +543,9 @@ Shows notes and completed TODOs for a time range.
 
 | Param | Type | Description |
 |-------|------|-------------|
-| `ids` | number or number[] | ID(s) to delete |
+| `ids` | number or number[] | ID(s) to delete permanently |
+
+Use this to stop recurring reminders permanently.
 </details>
 
 <details>
@@ -366,7 +553,7 @@ Shows notes and completed TODOs for a time range.
 
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| `query` | string | — | Search text (required) |
+| `query` | string | — | Search text (required, max 500 chars) |
 | `type` | `all` `notes` `todos` | `all` | Search scope |
 | `topic` | string | — | Filter by topic |
 | `scope` | `project` `global` | `project` | Project or global |
@@ -379,8 +566,8 @@ Shows notes and completed TODOs for a time range.
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | `action` | `list` `add` | `list` | List or create topics |
-| `name` | string | — | New topic name (for add) |
-| `description` | string | — | Topic description (for add) |
+| `name` | string | — | New topic name (lowercase, `[a-z0-9-]` only, max 50 chars) |
+| `description` | string | — | Topic description (max 200 chars) |
 </details>
 
 ---
@@ -391,56 +578,14 @@ All data lives in a single SQLite database:
 
 ```
 ~/.logbook/
-└── logbook.db          # All projects, notes, TODOs in one file
+└── logbook.db          # All projects, notes, TODOs, reminders in one file
 ```
 
 - **WAL mode** for concurrent reads
 - **FTS5** virtual tables for instant full-text search
 - **Triggers** keep search indexes in sync automatically
 - **Foreign keys** with `ON DELETE SET NULL` — delete a project, notes remain
-
-Add to your global `.gitignore`:
-```
-.logbook/
-```
-
----
-
-## How It Improves Your Productivity
-
-### Morning standup in 10 seconds
-
-Instead of trying to remember what you did yesterday:
-
-```
-"What did I do yesterday?"
-→ Complete summary: notes, decisions, completed TODOs
-```
-
-### Never lose a decision again
-
-```
-"Why did we choose JWT?"
-→ Search finds your note: "Decided JWT over sessions for horizontal scalability"
-```
-
-### One place for all TODOs
-
-No more scattered checklists. Manual TODOs + code TODOs + priorities, all in one view:
-
-```
-"What's pending?"
-→ Grouped by topic, with priority flags, across code and manual items
-```
-
-### Context that survives across sessions
-
-Your AI assistant forgets everything between sessions. Your logbook doesn't:
-
-```
-"Search everything about the auth migration"
-→ All notes, decisions, and TODOs related to auth — from any date
-```
+- **Code TODO snapshots** — tracks which code TODOs existed, detects when they're resolved
 
 ---
 
@@ -449,16 +594,18 @@ Your AI assistant forgets everything between sessions. Your logbook doesn't:
 ```
 src/
 ├── index.ts              # Entry: --mcp → server, else CLI
-├── server.ts             # createServer() factory, registers 9 tools
+├── server.ts             # createServer() — 9 tools + 1 resource
 ├── cli.ts                # CLI (help, version)
 ├── types.ts              # Shared interfaces
 ├── db/
 │   ├── connection.ts     # getDb() singleton → ~/.logbook/logbook.db
 │   ├── schema.ts         # Tables + FTS5 + triggers + topic seed
-│   └── queries.ts        # Typed query functions
+│   └── queries.ts        # Typed query functions + reminder logic
 ├── git/
 │   ├── detect-repo.ts    # Auto-detect project via git rev-parse
 │   └── code-todos.ts     # Scan TODO/FIXME/HACK/BUG via git grep
+├── resources/
+│   └── reminders.ts      # MCP Resource: logbook://reminders
 └── tools/                # 9 MCP tools (one file each)
 ```
 
@@ -472,7 +619,7 @@ src/
 git clone https://github.com/cocaxcode/logbook-mcp.git
 cd logbook-mcp
 npm install
-npm test              # 56 tests
+npm test              # 60 tests
 npm run build         # Build with tsup
 npm run typecheck     # TypeScript check
 npm run inspector     # Test with MCP Inspector
