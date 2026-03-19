@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { getDb } from '../db/connection.js'
-import { getAllTopics, insertTopic } from '../db/queries.js'
+import { getAllTopics, getTopicByName, insertTopic } from '../db/queries.js'
 
 export function registerTopicsTool(server: McpServer): void {
   server.tool(
@@ -34,6 +34,14 @@ export function registerTopicsTool(server: McpServer): void {
             return {
               isError: true,
               content: [{ type: 'text' as const, text: 'El parametro "name" es obligatorio para action=add' }],
+            }
+          }
+
+          const existing = getTopicByName(db, name)
+          if (existing) {
+            return {
+              isError: true,
+              content: [{ type: 'text' as const, text: `El topic "${name}" ya existe` }],
             }
           }
 

@@ -106,8 +106,10 @@ function resolveDates(
   to?: string,
 ): { dateFrom: string; dateTo: string } {
   if (from) {
-    const dateTo = to ?? new Date(Date.now() + 86400000).toISOString().split('T')[0]
-    return { dateFrom: from, dateTo }
+    // Add one day to 'to' so the range includes the entire end date
+    const endDate = to ?? from
+    const nextDay = new Date(new Date(endDate).getTime() + 86400000).toISOString().split('T')[0]
+    return { dateFrom: from, dateTo: nextDay }
   }
 
   const now = new Date()
