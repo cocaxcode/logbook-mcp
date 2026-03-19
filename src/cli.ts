@@ -16,6 +16,6 @@ export async function runCli(argv: string[]): Promise<void> {
   console.log('Para usar con Claude Code, añade a tu configuracion MCP:')
   console.log('  "logbook-mcp": {')
   console.log('    "command": "npx",')
-  console.log('    "args": ["@cocaxcode/logbook-mcp", "--mcp"]')
+  console.log('    "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]')
   console.log('  }')
 }

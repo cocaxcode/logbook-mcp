@@ -53,7 +53,7 @@ Your TODOs live in 5 different places: Jira, sticky notes, code comments, your h
 ### Claude Code (recommended)
 
 ```bash
-claude mcp add logbook-mcp -- npx @cocaxcode/logbook-mcp --mcp
+claude mcp add logbook-mcp -- npx @cocaxcode/logbook-mcp@latest --mcp
 ```
 
 ### Claude Desktop
@@ -65,7 +65,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "logbook-mcp": {
       "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp", "--mcp"]
+      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
     }
   }
 }
@@ -88,7 +88,7 @@ Add to `.cursor/mcp.json` in your project:
   "mcpServers": {
     "logbook-mcp": {
       "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp", "--mcp"]
+      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
     }
   }
 }
@@ -103,7 +103,7 @@ Add to `.windsurf/mcp.json`:
   "mcpServers": {
     "logbook-mcp": {
       "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp", "--mcp"]
+      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
     }
   }
 }
@@ -118,7 +118,7 @@ Add to `.vscode/mcp.json`:
   "servers": {
     "logbook-mcp": {
       "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp", "--mcp"]
+      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
     }
   }
 }
@@ -127,7 +127,7 @@ Add to `.vscode/mcp.json`:
 ### Codex CLI
 
 ```bash
-codex mcp add logbook-mcp -- npx @cocaxcode/logbook-mcp --mcp
+codex mcp add logbook-mcp -- npx @cocaxcode/logbook-mcp@latest --mcp
 ```
 
 ### Gemini CLI
@@ -139,7 +139,7 @@ Add to `.gemini/settings.json`:
   "mcpServers": {
     "logbook-mcp": {
       "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp", "--mcp"]
+      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
     }
   }
 }
