@@ -1,0 +1,103 @@
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { z } from 'zod'
+import { getDb } from '../db/connection.js'
+import { getAllTopics, getTopicByName, insertTodo } from '../db/queries.js'
+import { autoRegisterRepo } from '../git/detect-repo.js'
+import type { TodoAddItem, TodoWithMeta } from '../types.js'
+
+const priorityEnum = z.enum(['low', 'normal', 'high', 'urgent'])
+
+export function registerTodoAddTool(server: McpServer): void {
+  server.tool(
+    'logbook_todo_add',
+    'Crea uno o varios TODOs. Para uno solo usa content. Para varios usa items (array). El topic se puede pasar o dejar que la AI lo infiera.',
+    {
+      content: z
+        .string()
+        .optional()
+        .describe('Contenido del TODO (para crear uno solo)'),
+      topic: z
+        .string()
+        .optional()
+        .describe('Topic para el TODO individual'),
+      priority: priorityEnum
+        .optional()
+        .default('normal')
+        .describe('Prioridad del TODO individual'),
+      items: z
+        .array(
+          z.object({
+            content: z.string().describe('Contenido del TODO'),
+            topic: z.string().optional().describe('Topic'),
+            priority: priorityEnum.optional().default('normal').describe('Prioridad'),
+          }),
+        )
+        .optional()
+        .describe('Array de TODOs para crear varios a la vez'),
+    },
+    async ({ content, topic, priority, items }) => {
+      try {
+        if (!content && (!items || items.length === 0)) {
+          return {
+            isError: true,
+            content: [{
+              type: 'text' as const,
+              text: 'Debes pasar "content" (para uno) o "items" (para varios)',
+            }],
+          }
+        }
+
+        const db = getDb()
+        const repo = autoRegisterRepo(db)
+        const repoId = repo?.id ?? null
+
+        const todoItems: TodoAddItem[] = items
+          ? items
+          : [{ content: content!, topic, priority: priority ?? 'normal' }]
+
+        const results: TodoWithMeta[] = []
+
+        for (const item of todoItems) {
+          let topicId: number | null = null
+          if (item.topic) {
+            const topicRow = getTopicByName(db, item.topic)
+            if (!topicRow) {
+              const available = getAllTopics(db)
+              return {
+                isError: true,
+                content: [{
+                  type: 'text' as const,
+                  text: `Topic "${item.topic}" no existe. Disponibles: ${available.map((t) => t.name).join(', ')}`,
+                }],
+              }
+            }
+            topicId = topicRow.id
+          }
+
+          const todo = insertTodo(
+            db,
+            repoId,
+            topicId,
+            item.content,
+            item.priority ?? 'normal',
+          )
+          results.push(todo)
+        }
+
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(
+              results.length === 1 ? results[0] : { created: results.length, todos: results },
+            ),
+          }],
+        }
+      } catch (err: unknown) {
+        return {
+          isError: true,
+          content: [{ type: 'text' as const, text: `Error creando TODO: ${(err as Error).message}` }],
+        }
+      }
+    },
+  )
+}
