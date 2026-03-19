@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { getDb } from '../db/connection.js'
-import { getDueReminders } from '../db/queries.js'
+import { ackRecurringReminder, getDueReminders } from '../db/queries.js'
 
 export function registerRemindersResource(server: McpServer): void {
   server.resource(
@@ -18,6 +18,13 @@ export function registerRemindersResource(server: McpServer): void {
         // No reminders → empty content (no tokens wasted)
         if (!result) {
           return { contents: [] }
+        }
+
+        // Auto-ack recurring reminders on first read (won't show again today)
+        for (const group of result.recurring) {
+          for (const reminder of group.reminders) {
+            ackRecurringReminder(db, reminder.id)
+          }
         }
 
         return {
