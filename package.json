@@ -1,7 +1,7 @@
 {
   "name": "@cocaxcode/logbook-mcp",
-  "version": "0.4.1",
-  "description": "MCP server — cuaderno de bitácora del developer. Notas, TODOs y code TODOs sin salir de tu AI.",
+  "version": "0.4.4",
+  "description": "Developer logbook MCP server. Notes, TODOs, reminders, code TODOs with full-text search. Zero config, auto-detects projects, SQLite-powered. Works with Claude, Cursor, Windsurf, Copilot, Gemini, Codex.",
   "type": "module",
   "bin": {
     "logbook-mcp": "dist/index.js"
@@ -28,18 +28,43 @@
   "keywords": [
     "mcp",
     "mcp-server",
+    "model-context-protocol",
     "logbook",
     "developer-tools",
     "notes",
     "todos",
+    "reminders",
     "checklist",
-    "sqlite"
+    "code-todos",
+    "full-text-search",
+    "fts5",
+    "sqlite",
+    "productivity",
+    "project-management",
+    "claude",
+    "cursor",
+    "windsurf",
+    "copilot",
+    "gemini",
+    "codex",
+    "cline",
+    "aider",
+    "claude-code",
+    "claude-desktop",
+    "opencode",
+    "ai-tools",
+    "ai-agent"
   ],
+  "mcpName": "io.github.cocaxcode/logbook-mcp",
   "author": "cocaxcode",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/cocaxcode/logbook-mcp.git"
+  },
+  "homepage": "https://github.com/cocaxcode/logbook-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/cocaxcode/logbook-mcp/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.0",

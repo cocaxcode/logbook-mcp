@@ -44,8 +44,6 @@ CREATE INDEX IF NOT EXISTS idx_todos_repo ON todos(repo_id);
 CREATE INDEX IF NOT EXISTS idx_todos_topic ON todos(topic_id);
 CREATE INDEX IF NOT EXISTS idx_todos_status ON todos(status);
 CREATE INDEX IF NOT EXISTS idx_todos_date ON todos(created_at);
-CREATE INDEX IF NOT EXISTS idx_todos_remind ON todos(remind_at);
-
 CREATE TABLE IF NOT EXISTS code_todo_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   repo_id INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
@@ -95,6 +93,17 @@ CREATE TRIGGER IF NOT EXISTS todos_au AFTER UPDATE ON todos BEGIN
   INSERT INTO todos_fts(todos_fts, rowid, content) VALUES ('delete', old.id, old.content);
   INSERT INTO todos_fts(rowid, content) VALUES (new.id, new.content);
 END;
+`
+
+export const MIGRATIONS_SQL = `
+-- Add reminder columns to existing todos tables (safe to run multiple times)
+ALTER TABLE todos ADD COLUMN remind_at TEXT;
+ALTER TABLE todos ADD COLUMN remind_pattern TEXT;
+ALTER TABLE todos ADD COLUMN remind_last_done TEXT;
+`
+
+export const POST_MIGRATION_SQL = `
+CREATE INDEX IF NOT EXISTS idx_todos_remind ON todos(remind_at);
 `
 
 export const SEED_TOPICS_SQL = `

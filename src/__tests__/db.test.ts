@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import type Database from 'better-sqlite3'
-import { createTestDb, seedRepo, seedNote, seedTodo, getTopicId } from './helpers.js'
+import { createTestDb, createLegacyTestDb, applyMigrations, seedRepo, seedNote, seedTodo, getTopicId } from './helpers.js'
 import {
   insertRepo,
   getRepoByPath,
@@ -323,6 +323,74 @@ describe('code TODO sync', () => {
     const result = syncCodeTodos(db, repoId, todos)
     expect(result.added).toBe(0)
     expect(result.resolved).toBe(0)
+  })
+})
+
+describe('migrations (legacy DB upgrade)', () => {
+  it('migra DB sin columnas de reminders', () => {
+    const legacyDb = createLegacyTestDb()
+
+    // Verify old schema: no remind_at column
+    const cols = legacyDb
+      .prepare("PRAGMA table_info('todos')")
+      .all() as { name: string }[]
+    const colNames = cols.map((c) => c.name)
+    expect(colNames).not.toContain('remind_at')
+    expect(colNames).not.toContain('remind_pattern')
+    expect(colNames).not.toContain('remind_last_done')
+
+    // Insert a todo BEFORE migration (old schema)
+    legacyDb.exec(`INSERT INTO repos (name, path) VALUES ('old-repo', '/old')`)
+    const topicId = (legacyDb.prepare("SELECT id FROM topics WHERE name = 'feature'").get() as { id: number }).id
+    legacyDb.exec(`INSERT INTO todos (repo_id, topic_id, content) VALUES (1, ${topicId}, 'Old todo')`)
+
+    // Run migration
+    applyMigrations(legacyDb)
+
+    // Verify new columns exist
+    const newCols = legacyDb
+      .prepare("PRAGMA table_info('todos')")
+      .all() as { name: string }[]
+    const newColNames = newCols.map((c) => c.name)
+    expect(newColNames).toContain('remind_at')
+    expect(newColNames).toContain('remind_pattern')
+    expect(newColNames).toContain('remind_last_done')
+
+    // Verify old data survived
+    const todos = legacyDb.prepare('SELECT * FROM todos').all() as { content: string; remind_at: string | null }[]
+    expect(todos).toHaveLength(1)
+    expect(todos[0].content).toBe('Old todo')
+    expect(todos[0].remind_at).toBeNull()
+
+    // Verify reminder topic was added
+    const topics = legacyDb.prepare('SELECT name FROM topics ORDER BY name').all() as { name: string }[]
+    expect(topics.map((t) => t.name)).toContain('reminder')
+
+    legacyDb.close()
+  })
+
+  it('migracion es idempotente (no falla si ya se migro)', () => {
+    const legacyDb = createLegacyTestDb()
+    applyMigrations(legacyDb)
+    // Second run should not throw
+    expect(() => applyMigrations(legacyDb)).not.toThrow()
+    legacyDb.close()
+  })
+
+  it('puede insertar todos con remind_at despues de migrar', () => {
+    const legacyDb = createLegacyTestDb()
+    applyMigrations(legacyDb)
+
+    legacyDb.exec(`INSERT INTO repos (name, path) VALUES ('repo', '/repo')`)
+    const topicId = (legacyDb.prepare("SELECT id FROM topics WHERE name = 'reminder'").get() as { id: number }).id
+    legacyDb
+      .prepare('INSERT INTO todos (repo_id, topic_id, content, remind_at, remind_pattern) VALUES (?, ?, ?, ?, ?)')
+      .run(1, topicId, 'Deploy', '2026-03-20', null)
+
+    const todo = legacyDb.prepare('SELECT * FROM todos WHERE id = 1').get() as { remind_at: string }
+    expect(todo.remind_at).toBe('2026-03-20')
+
+    legacyDb.close()
   })
 })
 

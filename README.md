@@ -12,7 +12,7 @@
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License" /></a>
   <img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
   <img src="https://img.shields.io/badge/tools-9-blueviolet?style=flat-square" alt="9 tools" />
-  <img src="https://img.shields.io/badge/tests-60-brightgreen?style=flat-square" alt="60 tests" />
+  <img src="https://img.shields.io/badge/tests-63-brightgreen?style=flat-square" alt="63 tests" />
 </p>
 
 <p align="center">

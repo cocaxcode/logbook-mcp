@@ -41,7 +41,7 @@ src/
 ## Commands
 
 ```bash
-npm test        # Vitest (56 tests)
+npm test        # Vitest (63 tests)
 npm run build   # tsup → dist/
 npm run typecheck # tsc --noEmit
 npm run inspector # MCP Inspector para probar tools
@@ -68,6 +68,12 @@ npm run inspector # MCP Inspector para probar tools
 | `logbook_search` | Búsqueda full-text (FTS5) |
 | `logbook_topics` | Listar/crear topics |
 
-## 6 Topics predefinidos
+## 1 MCP Resource
 
-feature, fix, chore, idea, decision, blocker
+| Resource | Funcion |
+|----------|---------|
+| `logbook://reminders` | Recordatorios pendientes/vencidos/recurrentes (auto-ack) |
+
+## 7 Topics predefinidos
+
+feature, fix, chore, idea, decision, blocker, reminder
