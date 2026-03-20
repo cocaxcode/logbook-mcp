@@ -28,9 +28,9 @@
 
 ## Quick Overview
 
-logbook-mcp is an MCP server that turns your AI assistant into a persistent developer logbook. Capture decisions, track TODOs, set reminders, and search everything — without leaving your editor.
+logbook-mcp is an MCP server that turns your AI assistant into a persistent developer logbook. Capture decisions, track TODOs, set reminders, scan code TODOs, and search everything with full-text search — without leaving your editor.
 
-It auto-detects your git project, stores everything in a local SQLite database, and works with any MCP-compatible client: Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Codex CLI, or Gemini CLI.
+It auto-detects your git project, stores everything in a local SQLite database at `~/.logbook/logbook.db`, and works with any MCP-compatible client: Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Codex CLI, or Gemini CLI. **All data stays on your machine — nothing is synced, nothing is tracked, nothing leaves your disk.** Notes are scoped per-project automatically, but you can search globally across all your projects at any time.
 
 ---
 
