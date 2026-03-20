@@ -59,7 +59,7 @@ Your TODOs live in 5 different places: Jira, sticky notes, code comments, your h
 ### Claude Code (recommended)
 
 ```bash
-claude mcp add logbook-mcp -- npx @cocaxcode/logbook-mcp@latest --mcp
+claude mcp add --scope user logbook -- npx @cocaxcode/logbook-mcp@latest --mcp
 ```
 
 ### Claude Desktop
