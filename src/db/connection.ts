@@ -33,8 +33,11 @@ export function getDb(dbPath?: string): Database.Database {
   for (const stmt of MIGRATIONS_SQL.split(';').map((s) => s.trim()).filter(Boolean)) {
     try {
       db.exec(stmt)
-    } catch {
-      // Column already exists — safe to ignore
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (!msg.includes('duplicate column')) {
+        console.error(`Migration warning: ${msg}`)
+      }
     }
   }
 
