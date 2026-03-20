@@ -236,8 +236,7 @@ Both one-time and recurring patterns are supported:
 
 Recurring reminders auto-acknowledge after being shown once per day. One-time reminders that were missed show as overdue.
 
-> [!TIP]
-> logbook-mcp exposes an MCP Resource (`logbook://reminders`) that clients can load on session start. In Claude Code and Claude Desktop, reminders appear automatically without asking. In other clients, just say *"any reminders?"*.
+> **Tip:** logbook-mcp exposes an MCP Resource (`logbook://reminders`) that clients can load on session start. In Claude Code and Claude Desktop, reminders appear automatically without asking. In other clients, just say *"any reminders?"*.
 
 ### Full-text search (FTS5)
 
@@ -389,8 +388,7 @@ All data lives in a single SQLite database at `~/.logbook/logbook.db`.
 - **Foreign keys** with `ON DELETE SET NULL` — delete a project, notes remain
 - **Code TODO snapshots** — tracks which code TODOs existed, detects when they disappear
 
-> [!NOTE]
-> The database is created automatically on first use. No setup required.
+> **Note:** The database is created automatically on first use. No setup required.
 
 ---
 
