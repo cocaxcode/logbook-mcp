@@ -45,6 +45,7 @@ export function createServer(): McpServer {
   const server = new McpServer({
     name: 'logbook-mcp',
     version: VERSION,
+  }, {
     instructions: INSTRUCTIONS,
   })
 

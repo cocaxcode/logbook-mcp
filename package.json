@@ -1,6 +1,6 @@
 {
   "name": "@cocaxcode/logbook-mcp",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Developer logbook MCP server. Notes, TODOs, reminders, code TODOs with full-text search. SQLite or Obsidian mode. Zero config, auto-detects projects. Works with Claude, Cursor, Windsurf, Copilot, Gemini, Codex.",
   "type": "module",
   "bin": {
