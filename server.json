@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.cocaxcode/logbook-mcp",
+  "description": "Developer logbook MCP server. 20 tools: notes, TODOs, standups, decisions, debug sessions, reminders. SQLite or Obsidian mode.",
+  "repository": {
+    "url": "https://github.com/cocaxcode/logbook-mcp",
+    "source": "github"
+  },
+  "version": "0.7.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@cocaxcode/logbook-mcp",
+      "version": "0.7.0",
+      "runtime": "node",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
