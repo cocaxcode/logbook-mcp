@@ -1,14 +1,13 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { getDb } from '../db/connection.js'
-import { resolveTopicId, updateTodo } from '../db/queries.js'
+import { getStorage } from '../storage/index.js'
 
 export function registerTodoEditTool(server: McpServer): void {
   server.tool(
     'logbook_todo_edit',
     'Edita un TODO existente: contenido, topic o prioridad.',
     {
-      id: z.number().describe('ID del TODO a editar'),
+      id: z.union([z.number(), z.string()]).describe('ID del TODO a editar'),
       content: z.string().optional().describe('Nuevo contenido'),
       topic: z.string().optional().describe('Nuevo topic'),
       priority: z
@@ -18,11 +17,10 @@ export function registerTodoEditTool(server: McpServer): void {
     },
     async ({ id, content, topic, priority }) => {
       try {
-        const db = getDb()
+        const storage = getStorage()
+        storage.autoRegisterRepo()
 
-        const topicId = topic ? resolveTopicId(db, topic) : undefined
-
-        const updated = updateTodo(db, id, { content, topicId, priority })
+        const updated = storage.updateTodo(String(id), { content, topic, priority })
 
         if (!updated) {
           return {

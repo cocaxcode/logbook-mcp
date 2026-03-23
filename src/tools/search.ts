@@ -1,13 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { getDb } from '../db/connection.js'
-import {
-  getTopicByName,
-  searchNotes,
-  searchTodos,
-} from '../db/queries.js'
-import { autoRegisterRepo } from '../git/detect-repo.js'
-import type { SearchResult } from '../types.js'
+import { getStorage } from '../storage/index.js'
 
 export function registerSearchTool(server: McpServer): void {
   server.tool(
@@ -34,44 +27,10 @@ export function registerSearchTool(server: McpServer): void {
     },
     async ({ query, type, topic, scope, limit }) => {
       try {
-        const db = getDb()
-        const repo = scope === 'project' ? autoRegisterRepo(db) : null
+        const storage = getStorage()
+        if (scope === 'project') storage.autoRegisterRepo()
 
-        let topicId: number | undefined
-        if (topic) {
-          const topicRow = getTopicByName(db, topic)
-          if (topicRow) topicId = topicRow.id
-        }
-
-        const filters = {
-          repoId: repo?.id,
-          topicId,
-          limit,
-        }
-
-        const results: SearchResult[] = []
-
-        if (type !== 'todos') {
-          const notes = searchNotes(db, query, filters)
-          results.push(
-            ...notes.map((n, i) => ({
-              type: 'note' as const,
-              data: n,
-              rank: i,
-            })),
-          )
-        }
-
-        if (type !== 'notes') {
-          const todos = searchTodos(db, query, filters)
-          results.push(
-            ...todos.map((t, i) => ({
-              type: 'todo' as const,
-              data: t,
-              rank: i,
-            })),
-          )
-        }
+        const results = storage.search(query, { type, topic, scope, limit })
 
         return {
           content: [{

@@ -1,7 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { getDb } from '../db/connection.js'
-import { deleteTodos } from '../db/queries.js'
+import { getStorage } from '../storage/index.js'
 
 export function registerTodoRmTool(server: McpServer): void {
   server.tool(
@@ -9,14 +8,16 @@ export function registerTodoRmTool(server: McpServer): void {
     'Elimina TODOs por ID. Acepta uno o varios IDs.',
     {
       ids: z
-        .union([z.number(), z.array(z.number())])
+        .union([z.number(), z.string(), z.array(z.union([z.number(), z.string()]))])
         .describe('ID o array de IDs de TODOs a eliminar'),
     },
     async ({ ids }) => {
       try {
-        const db = getDb()
-        const idArray = Array.isArray(ids) ? ids : [ids]
-        const deleted = deleteTodos(db, idArray)
+        const storage = getStorage()
+        storage.autoRegisterRepo()
+
+        const idArray = (Array.isArray(ids) ? ids : [ids]).map(String)
+        const deleted = storage.deleteTodos(idArray)
 
         return {
           content: [{

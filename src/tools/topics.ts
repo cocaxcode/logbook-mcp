@@ -1,7 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { getDb } from '../db/connection.js'
-import { getAllTopics, getTopicByName, insertTopic } from '../db/queries.js'
+import { getStorage } from '../storage/index.js'
 
 export function registerTopicsTool(server: McpServer): void {
   server.tool(
@@ -27,7 +26,7 @@ export function registerTopicsTool(server: McpServer): void {
     },
     async ({ action, name, description }) => {
       try {
-        const db = getDb()
+        const storage = getStorage()
 
         if (action === 'add') {
           if (!name) {
@@ -37,21 +36,22 @@ export function registerTopicsTool(server: McpServer): void {
             }
           }
 
-          const existing = getTopicByName(db, name)
-          if (existing) {
+          // Check if exists
+          const topics = storage.getTopics()
+          if (topics.some((t) => t.name === name)) {
             return {
               isError: true,
               content: [{ type: 'text' as const, text: `El topic "${name}" ya existe` }],
             }
           }
 
-          const topic = insertTopic(db, name, description)
+          const topic = storage.insertTopic(name, description)
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(topic) }],
           }
         }
 
-        const topics = getAllTopics(db)
+        const topics = storage.getTopics()
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(topics) }],
         }

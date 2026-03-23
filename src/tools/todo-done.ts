@@ -1,8 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { getDb } from '../db/connection.js'
-import { ackRecurringReminder, updateTodoStatus } from '../db/queries.js'
-import type { TodoWithMeta } from '../types.js'
+import { getStorage } from '../storage/index.js'
+import type { TodoEntry } from '../storage/types.js'
 
 export function registerTodoDoneTool(server: McpServer): void {
   server.tool(
@@ -10,7 +9,7 @@ export function registerTodoDoneTool(server: McpServer): void {
     'Marca TODOs como hechos o los devuelve a pendiente (undo). Los recordatorios recurrentes se marcan como hechos por hoy y vuelven automaticamente el proximo dia que toque.',
     {
       ids: z
-        .union([z.number(), z.array(z.number())])
+        .union([z.number(), z.string(), z.array(z.union([z.number(), z.string()]))])
         .describe('ID o array de IDs de TODOs a marcar'),
       undo: z
         .boolean()
@@ -20,18 +19,20 @@ export function registerTodoDoneTool(server: McpServer): void {
     },
     async ({ ids, undo }) => {
       try {
-        const db = getDb()
-        const idArray = Array.isArray(ids) ? ids : [ids]
+        const storage = getStorage()
+        storage.autoRegisterRepo()
 
-        // Separate recurring from regular
-        const regularIds: number[] = []
-        const recurringIds: number[] = []
+        const idArray = (Array.isArray(ids) ? ids : [ids]).map(String)
+
+        // Get all todos to separate recurring from regular
+        const allTodos = storage.getTodos({ status: 'all' })
+        const todoMap = new Map(allTodos.map((t) => [t.id, t]))
+
+        const regularIds: string[] = []
+        const recurringIds: string[] = []
 
         for (const id of idArray) {
-          const todo = db
-            .prepare('SELECT remind_pattern FROM todos WHERE id = ?')
-            .get(id) as { remind_pattern: string | null } | undefined
-
+          const todo = todoMap.get(id)
           if (todo?.remind_pattern && !undo) {
             recurringIds.push(id)
           } else {
@@ -39,28 +40,20 @@ export function registerTodoDoneTool(server: McpServer): void {
           }
         }
 
-        const results: TodoWithMeta[] = []
+        const results: TodoEntry[] = []
 
-        // Regular TODOs: mark done/undo as usual
+        // Regular TODOs: mark done/undo
         if (regularIds.length > 0) {
           const status = undo ? 'pending' : 'done'
-          const updated = updateTodoStatus(db, regularIds, status)
+          const updated = storage.updateTodoStatus(regularIds, status)
           results.push(...updated)
         }
 
         // Recurring reminders: just ack for today
         for (const id of recurringIds) {
-          ackRecurringReminder(db, id)
-          const todo = db
-            .prepare(
-              `SELECT t.*, r.name as repo_name, tp.name as topic_name, 'manual' as source
-               FROM todos t
-               LEFT JOIN repos r ON t.repo_id = r.id
-               LEFT JOIN topics tp ON t.topic_id = tp.id
-               WHERE t.id = ?`,
-            )
-            .get(id) as TodoWithMeta
-          results.push(todo)
+          storage.ackRecurringReminder(id)
+          const todo = todoMap.get(id)
+          if (todo) results.push(todo)
         }
 
         return {

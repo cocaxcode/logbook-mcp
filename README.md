@@ -2,7 +2,7 @@
   <h1 align="center">@cocaxcode/logbook-mcp</h1>
   <p align="center">
     <strong>Your developer logbook, always one sentence away.</strong><br/>
-    Notes &middot; TODOs &middot; Reminders &middot; Code scanning &middot; Full-text search &middot; Zero config
+    Notes &middot; TODOs &middot; Reminders &middot; Code scanning &middot; Full-text search &middot; Obsidian mode &middot; Zero config
   </p>
 </p>
 
@@ -11,7 +11,7 @@
   <a href="https://www.npmjs.com/package/@cocaxcode/logbook-mcp"><img src="https://img.shields.io/npm/dm/@cocaxcode/logbook-mcp.svg?style=flat-square" alt="npm downloads" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License" /></a>
   <img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
-  <img src="https://img.shields.io/badge/tools-9-blueviolet?style=flat-square" alt="9 tools" />
+  <img src="https://img.shields.io/badge/tools-15-blueviolet?style=flat-square" alt="15 tools" />
 </p>
 
 <p align="center">
@@ -30,7 +30,9 @@
 
 logbook-mcp is an MCP server that turns your AI assistant into a persistent developer logbook. Capture decisions, track TODOs, set reminders, scan code TODOs, and search everything with full-text search — without leaving your editor.
 
-It auto-detects your git project, stores everything in a local SQLite database at `~/.logbook/logbook.db`, and works with any MCP-compatible client: Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Codex CLI, or Gemini CLI. **All data stays on your machine — nothing is synced, nothing is tracked, nothing leaves your disk.** Notes are scoped per-project automatically, but you can search globally across all your projects at any time.
+It auto-detects your git project, stores everything locally, and works with any MCP-compatible client: Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Codex CLI, or Gemini CLI. **All data stays on your machine — nothing is synced, nothing is tracked, nothing leaves your disk.** Notes are scoped per-project automatically, but you can search globally across all your projects at any time.
+
+Two storage modes: **SQLite** (default, zero config) or **Obsidian** (markdown files with frontmatter, visible in your Obsidian vault with Graph View, Dataview, Tasks, and Calendar).
 
 ---
 
@@ -260,12 +262,13 @@ logbook-mcp auto-detects which git project you're in via `git rev-parse`. No con
 
 | Category | Tools | Count |
 |----------|-------|:-----:|
-| **Activity** | `logbook_log` `logbook_search` | 2 |
-| **Notes** | `logbook_note` | 1 |
+| **Activity** | `logbook_log` `logbook_search` `logbook_timeline` | 3 |
+| **Notes** | `logbook_note` `logbook_standup` `logbook_decision` `logbook_debug` | 4 |
 | **TODOs** | `logbook_todo_add` `logbook_todo_list` `logbook_todo_done` `logbook_todo_edit` `logbook_todo_rm` | 5 |
-| **Config** | `logbook_topics` | 1 |
+| **Config** | `logbook_topics` `logbook_tags` | 2 |
+| **Migration** | `logbook_migrate` | 1 |
 | **Resource** | `logbook://reminders` | — |
-| | | **9 tools + 1 resource** |
+| | | **15 tools + 1 resource** |
 
 <details>
 <summary><code>logbook_log</code> — Activity for a period</summary>
@@ -375,20 +378,72 @@ Use this to stop recurring reminders permanently.
 
 ## Storage
 
-All data lives in a single SQLite database at `~/.logbook/logbook.db`.
+### SQLite mode (default)
 
-```
-~/.logbook/
-└── logbook.db
-```
+All data lives in a single SQLite database at `~/.logbook/logbook.db`. Zero config.
 
 - **WAL mode** for concurrent reads
 - **FTS5** virtual tables for instant full-text search
 - **Triggers** keep search indexes in sync automatically
-- **Foreign keys** with `ON DELETE SET NULL` — delete a project, notes remain
 - **Code TODO snapshots** — tracks which code TODOs existed, detects when they disappear
 
-> **Note:** The database is created automatically on first use. No setup required.
+### Obsidian mode
+
+Writes markdown files with YAML frontmatter directly to your Obsidian vault. Configure with environment variables:
+
+```json
+{
+  "mcpServers": {
+    "logbook-mcp": {
+      "command": "npx",
+      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"],
+      "env": {
+        "LOGBOOK_STORAGE": "obsidian",
+        "LOGBOOK_DIR": "/path/to/your/vault/logbook"
+      }
+    }
+  }
+}
+```
+
+Files are organized by workspace, project, and type:
+
+```
+vault/logbook/
+├── cocaxcode/
+│   ├── cocaxcode-api/
+│   │   ├── notes/          ← logbook_note
+│   │   ├── todos/          ← logbook_todo_add
+│   │   ├── decisions/      ← logbook_decision
+│   │   ├── debug/          ← logbook_debug
+│   │   ├── standups/       ← logbook_standup
+│   │   └── attachments/    ← copied files
+│   └── cocaxcode-web/
+├── optimus/
+│   └── optimus-hub/
+```
+
+Each file has YAML frontmatter that Obsidian plugins can query:
+
+```yaml
+---
+type: todo
+date: 2026-03-21
+project: cocaxcode-api
+workspace: cocaxcode
+status: pending
+priority: high
+due: 2026-03-25
+tags: [auth, urgent]
+---
+- [ ] Fix JWT refresh token 🔼 📅 2026-03-25
+```
+
+**Recommended Obsidian plugins:** Dataview (SQL-like queries), Calendar (date view), Tasks (checkbox management), Graph View (built-in, shows connections via `[[wikilinks]]`).
+
+**Migration from SQLite:** Run `logbook_migrate` with Obsidian mode enabled to convert existing data.
+
+> **Tip:** Combine with [Self-hosted LiveSync](https://github.com/vrtmrz/obsidian-livesync) + CouchDB on your VPS to sync your vault across PC, Android, and iOS for free.
 
 ---
 
@@ -397,19 +452,18 @@ All data lives in a single SQLite database at `~/.logbook/logbook.db`.
 ```
 src/
 ├── index.ts              # Entry: --mcp → server, else CLI
-├── server.ts             # createServer() — 9 tools + 1 resource
+├── server.ts             # createServer() — 15 tools + 1 resource
 ├── cli.ts                # CLI (help, version)
 ├── types.ts              # Shared interfaces
-├── db/
-│   ├── connection.ts     # getDb() singleton → ~/.logbook/logbook.db
-│   ├── schema.ts         # Tables + FTS5 + triggers + topic seed
-│   └── queries.ts        # Typed query functions + reminder logic
-├── git/
-│   ├── detect-repo.ts    # Auto-detect project via git rev-parse
-│   └── code-todos.ts     # Scan TODO/FIXME/HACK/BUG via git grep
-├── resources/
-│   └── reminders.ts      # MCP Resource: logbook://reminders
-└── tools/                # 9 MCP tools (one file each)
+├── storage/
+│   ├── types.ts          # StorageBackend interface
+│   ├── index.ts          # getStorage() factory (sqlite | obsidian)
+│   ├── sqlite/           # SQLite backend (wraps db/)
+│   └── obsidian/         # Obsidian backend (markdown + frontmatter)
+├── db/                   # SQLite internals
+├── git/                  # Git repo detection + code TODO scanning
+├── resources/            # MCP Resource: logbook://reminders
+└── tools/                # 15 MCP tools (one file each)
 ```
 
 **Stack:** TypeScript &middot; MCP SDK &middot; better-sqlite3 &middot; Zod &middot; tsup

@@ -1,3 +1,18 @@
+// ── Storage abstractions (re-exports) ──
+
+export type { StorageMode, EntryType, EntryId, StorageBackend } from './storage/types.js'
+export type { RepoInfo, WorkspaceInfo, EntryMeta } from './storage/types.js'
+export type { NoteEntry, TodoEntry, StandupEntry, DecisionEntry, DebugEntry } from './storage/types.js'
+export type {
+  NoteFilters, TodoFilters, TodoOpts, TodoUpdateFields,
+  SearchFilters, LogFilters, TimelineFilters,
+} from './storage/types.js'
+export type {
+  SearchResult as StorageSearchResult,
+  LogEntry as StorageLogEntry,
+  TagResult, TimelineEntry, TopicInfo, ReminderGroup, ReminderResult,
+} from './storage/types.js'
+
 // ── DB entities ──
 
 export interface Repo {

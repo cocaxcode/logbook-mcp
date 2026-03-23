@@ -1,8 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { getDb } from '../db/connection.js'
-import { insertNote, resolveTopicId } from '../db/queries.js'
-import { autoRegisterRepo } from '../git/detect-repo.js'
+import { getStorage } from '../storage/index.js'
 
 export function registerNoteTool(server: McpServer): void {
   server.tool(
@@ -17,12 +15,9 @@ export function registerNoteTool(server: McpServer): void {
     },
     async ({ content, topic }) => {
       try {
-        const db = getDb()
-        const repo = autoRegisterRepo(db)
-
-        const topicId = topic ? resolveTopicId(db, topic) : null
-
-        const note = insertNote(db, repo?.id ?? null, topicId, content)
+        const storage = getStorage()
+        storage.autoRegisterRepo()
+        const note = storage.insertNote(content, topic)
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(note) }],
         }

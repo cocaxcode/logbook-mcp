@@ -1,9 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { getDb } from '../db/connection.js'
-import { insertTodo, resolveTopicId } from '../db/queries.js'
-import { autoRegisterRepo } from '../git/detect-repo.js'
-import type { TodoAddItem, TodoWithMeta } from '../types.js'
+import { getStorage } from '../storage/index.js'
+import type { TodoAddItem } from '../types.js'
+import type { TodoEntry } from '../storage/types.js'
 
 const priorityEnum = z.enum(['low', 'normal', 'high', 'urgent'])
 
@@ -60,31 +59,26 @@ export function registerTodoAddTool(server: McpServer): void {
           }
         }
 
-        const db = getDb()
-        const repo = autoRegisterRepo(db)
-        const repoId = repo?.id ?? null
+        const storage = getStorage()
+        storage.autoRegisterRepo()
 
         const todoItems: TodoAddItem[] = items
           ? items
           : [{ content: content!, topic, priority: priority ?? 'normal', remind_at, remind_pattern }]
 
-        const results: TodoWithMeta[] = []
+        const results: TodoEntry[] = []
 
         for (const item of todoItems) {
           // Auto-assign topic "reminder" if remind_at is set and no topic
           const hasReminder = item.remind_at || item.remind_pattern
           const effectiveTopic = hasReminder && !item.topic ? 'reminder' : item.topic
-          const topicId = effectiveTopic ? resolveTopicId(db, effectiveTopic) : null
 
-          const todo = insertTodo(
-            db,
-            repoId,
-            topicId,
-            item.content,
-            item.priority ?? 'normal',
-            item.remind_at,
-            item.remind_pattern,
-          )
+          const todo = storage.insertTodo(item.content, {
+            topic: effectiveTopic,
+            priority: item.priority ?? 'normal',
+            remind_at: item.remind_at,
+            remind_pattern: item.remind_pattern,
+          })
           results.push(todo)
         }
 

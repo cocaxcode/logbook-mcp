@@ -1,10 +1,9 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import { getDb } from '../db/connection.js'
-import { getTopicByName, getTodos, syncCodeTodos } from '../db/queries.js'
-import { autoRegisterRepo, detectRepoPath } from '../git/detect-repo.js'
-import { scanCodeTodos } from '../git/code-todos.js'
-import type { CodeTodo, TodoGroup, TodoWithMeta } from '../types.js'
+import { getStorage } from '../storage/index.js'
+import { detectRepoPath } from '../git/detect-repo.js'
+import type { CodeTodo, TodoGroup } from '../types.js'
+import type { TodoEntry } from '../storage/types.js'
 
 export function registerTodoListTool(server: McpServer): void {
   server.tool(
@@ -37,23 +36,16 @@ export function registerTodoListTool(server: McpServer): void {
     },
     async ({ status, topic, priority, source, scope, from, to, limit }) => {
       try {
-        const db = getDb()
-        const repo = scope === 'project' ? autoRegisterRepo(db) : null
+        const storage = getStorage()
+        if (scope === 'project') storage.autoRegisterRepo()
 
-        let topicId: number | undefined
-        if (topic) {
-          const topicRow = getTopicByName(db, topic)
-          if (topicRow) topicId = topicRow.id
-        }
-
-        // Manual TODOs from DB
-        const manualTodos: TodoWithMeta[] =
+        // Manual TODOs
+        const manualTodos: TodoEntry[] =
           source === 'code'
             ? []
-            : getTodos(db, {
+            : storage.getTodos({
                 status,
-                repoId: repo?.id,
-                topicId,
+                topicId: topic,
                 priority,
                 from,
                 to,
@@ -66,11 +58,9 @@ export function registerTodoListTool(server: McpServer): void {
 
         if (source !== 'manual' && status !== 'done') {
           const repoPath = scope === 'project' ? detectRepoPath() : null
-          if (repoPath && repo) {
-            codeTodos = scanCodeTodos(repoPath)
-
-            // Sync: detect resolved code TODOs (disappeared from code)
-            syncResult = syncCodeTodos(db, repo.id, codeTodos)
+          if (repoPath) {
+            codeTodos = storage.getCodeTodos(repoPath)
+            syncResult = storage.syncCodeTodos(repoPath, codeTodos)
 
             if (topic) {
               codeTodos = codeTodos.filter((ct) => ct.topic_name === topic)
@@ -79,10 +69,10 @@ export function registerTodoListTool(server: McpServer): void {
         }
 
         // Group by topic
-        const groupMap = new Map<string, (TodoWithMeta | CodeTodo)[]>()
+        const groupMap = new Map<string, (TodoEntry | CodeTodo)[]>()
 
         for (const todo of manualTodos) {
-          const key = todo.topic_name ?? 'sin-topic'
+          const key = todo.topic ?? 'sin-topic'
           if (!groupMap.has(key)) groupMap.set(key, [])
           groupMap.get(key)!.push(todo)
         }
@@ -95,7 +85,7 @@ export function registerTodoListTool(server: McpServer): void {
 
         const groups: TodoGroup[] = Array.from(groupMap.entries())
           .sort(([a], [b]) => a.localeCompare(b))
-          .map(([topicName, items]) => ({ topic: topicName, items }))
+          .map(([topicName, items]) => ({ topic: topicName, items: items as TodoGroup['items'] }))
 
         return {
           content: [{
