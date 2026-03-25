@@ -1,0 +1,19 @@
+# Smithery configuration file: https://smithery.ai/docs/config#smitheryyaml
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      logbookDir:
+        type: string
+        description: Directory for logbook data storage.
+      logbookStorage:
+        type: string
+        description: Storage mode (sqlite or obsidian).
+        enum:
+          - sqlite
+          - obsidian
+  commandFunction:
+    |-
+      (config) => ({ command: 'npx', args: ['-y', '@cocaxcode/logbook-mcp'], env: Object.assign({}, config.logbookDir ? { LOGBOOK_DIR: config.logbookDir } : {}, config.logbookStorage ? { LOGBOOK_STORAGE: config.logbookStorage } : {}) })
