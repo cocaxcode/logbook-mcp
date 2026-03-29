@@ -96,13 +96,13 @@ No commands to memorize. Just say what you need.
 ### Claude Code (recommended)
 
 ```bash
-claude mcp add --scope user logbook -- npx @cocaxcode/logbook-mcp@latest --mcp
+claude mcp add --scope user logbook -- npx -y @cocaxcode/logbook-mcp@latest --mcp
 ```
 
 With Obsidian mode:
 
 ```bash
-claude mcp add --scope user logbook -- npx @cocaxcode/logbook-mcp@latest --mcp --storage obsidian --dir "/path/to/vault/logbook"
+claude mcp add --scope user logbook -- npx -y @cocaxcode/logbook-mcp@latest --mcp --storage obsidian --dir "/path/to/vault/logbook"
 ```
 
 ### Claude Desktop
@@ -114,7 +114,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "logbook-mcp": {
       "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
+      "args": ["-y", "@cocaxcode/logbook-mcp@latest", "--mcp"]
     }
   }
 }
@@ -128,7 +128,7 @@ With Obsidian mode:
     "logbook-mcp": {
       "command": "npx",
       "args": [
-        "@cocaxcode/logbook-mcp@latest", "--mcp",
+        "-y", "@cocaxcode/logbook-mcp@latest", "--mcp",
         "--storage", "obsidian",
         "--dir", "/path/to/vault/logbook"
       ]
@@ -155,7 +155,7 @@ With Obsidian mode:
   "mcpServers": {
     "logbook-mcp": {
       "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
+      "args": ["-y", "@cocaxcode/logbook-mcp@latest", "--mcp"]
     }
   }
 }
@@ -168,7 +168,7 @@ With Obsidian mode:
   "mcpServers": {
     "logbook-mcp": {
       "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
+      "args": ["-y", "@cocaxcode/logbook-mcp@latest", "--mcp"]
     }
   }
 }
@@ -181,7 +181,7 @@ With Obsidian mode:
   "servers": {
     "logbook-mcp": {
       "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
+      "args": ["-y", "@cocaxcode/logbook-mcp@latest", "--mcp"]
     }
   }
 }
@@ -190,7 +190,7 @@ With Obsidian mode:
 **Codex CLI**:
 
 ```bash
-codex mcp add logbook-mcp -- npx @cocaxcode/logbook-mcp@latest --mcp
+codex mcp add logbook-mcp -- npx -y @cocaxcode/logbook-mcp@latest --mcp
 ```
 
 **Gemini CLI** — add to `.gemini/settings.json`:
@@ -200,7 +200,7 @@ codex mcp add logbook-mcp -- npx @cocaxcode/logbook-mcp@latest --mcp
   "mcpServers": {
     "logbook-mcp": {
       "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
+      "args": ["-y", "@cocaxcode/logbook-mcp@latest", "--mcp"]
     }
   }
 }
@@ -514,7 +514,7 @@ Configure via CLI args (recommended), config file, or env vars:
 
 ```bash
 # CLI args (most reliable, especially on Windows)
-claude mcp add logbook -- npx @cocaxcode/logbook-mcp@latest --mcp --storage obsidian --dir "/path/to/vault/logbook"
+claude mcp add logbook -- npx -y @cocaxcode/logbook-mcp@latest --mcp --storage obsidian --dir "/path/to/vault/logbook"
 ```
 
 ```json
