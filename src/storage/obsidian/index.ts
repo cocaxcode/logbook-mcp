@@ -1,5 +1,5 @@
-import { existsSync, readFileSync, writeFileSync, rmSync, readdirSync, unlinkSync, statSync } from 'node:fs'
-import { basename, join } from 'node:path'
+import { existsSync, readFileSync, writeFileSync, rmSync, readdirSync, unlinkSync, statSync, openSync, closeSync } from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 import type { CodeTodo, Priority } from '../../types.js'
 import { detectRepoPath } from '../../git/detect-repo.js'
 import { scanCodeTodos } from '../../git/code-todos.js'
@@ -197,8 +197,8 @@ export class ObsidianStorage implements StorageBackend {
   private wsInfo: WorkspaceInfo | null = null
 
   constructor(baseDir: string) {
-    this.baseDir = baseDir
-    ensureDir(baseDir)
+    this.baseDir = baseDir.replace(/\\/g, '/')
+    ensureDir(this.baseDir)
   }
 
   // ── Repos ──
@@ -230,8 +230,20 @@ export class ObsidianStorage implements StorageBackend {
   insertNote(content: string, topic?: string): NoteEntry {
     const ws = this.getWorkspace()
     const date = todayDate()
+
+    // Check if topic has table kind — append row instead of creating file
+    if (topic) {
+      const topicKind = this.getTopicKind(topic)
+      if (topicKind === 'table') {
+        return this.insertTableRow(ws, content, topic, date)
+      }
+    }
+
     const slug = generateSlug(content.slice(0, 80))
-    const dir = this.typeDir(ws, 'note')
+
+    // Resolve custom folder from topic
+    const topicFolder = topic ? this.getTopicFolder(topic) : null
+    const dir = this.typeDir(ws, 'note', topicFolder)
     const filename = resolveFilename(dir, date, slug)
     const id = extractIdFromFilename(filename)
 
@@ -254,6 +266,144 @@ export class ObsidianStorage implements StorageBackend {
     const entry: NoteEntry = {
       id, type: 'note', date, project: ws.project, workspace: ws.workspace,
       topic: topic || null, tags: topic ? [topic] : [], content: body,
+    }
+    this.ensureDashboard()
+    return entry
+  }
+
+  /**
+   * Insert into a table-kind topic.
+   *
+   * Content format: "table_name | col1 | col2 | col3"
+   * - First segment before | is the table name (used as filename slug)
+   * - Remaining segments are column values
+   * - If no | found: uses topic name as table, content as single entry
+   *
+   * First row of a new table defines column count. Header names come from
+   * the optional "headers:" prefix: "headers:Version|Env|Status" then data rows.
+   *
+   * Tables are stored INSIDE the topic folder as individual .md files:
+   *   proyecto/deploys/deploy-log.md
+   *   proyecto/deploys/releases.md
+   */
+  private insertTableRow(ws: WorkspaceInfo, content: string, topic: string, date: string): NoteEntry {
+    const topicFolder = this.getTopicFolder(topic)
+    const dir = this.typeDir(ws, 'note', topicFolder)
+
+    let tableName: string
+    let values: string[]
+    let headers: string[] | null = null
+
+    // Normalize: support both \n and literal "\n" (AI sometimes sends escaped)
+    const normalized = content.replace(/\\n/g, '\n')
+
+    // Format 1: "headers:H1|H2|H3\nval1|val2|val3" (no table name → uses topic)
+    // Format 2: "table-name\nheaders:H1|H2|H3\nval1|val2|val3"
+    // Format 3: "table-name | headers:H1|H2|H3" (headers-only, no data row yet)
+    // Format 4: "table-name | val1 | val2 | val3" (data row)
+    // Format 5: "plain text" (no pipes → topic as table, simple entry)
+
+    if (normalized.startsWith('headers:')) {
+      // Format 1: headers + optional data
+      const lines = normalized.split('\n')
+      headers = lines[0].slice('headers:'.length).split('|').map((h) => h.trim())
+      tableName = topic
+      const dataLine = lines.slice(1).join('\n').trim()
+      values = dataLine ? (dataLine.includes('|') ? dataLine.split('|').map((v) => v.trim()) : [dataLine]) : []
+    } else if (normalized.includes('\n') && normalized.split('\n').some((l) => l.trim().startsWith('headers:'))) {
+      // Format 2: first line = table name, then headers line, then optional data
+      const lines = normalized.split('\n').map((l) => l.trim())
+      tableName = generateSlug(lines[0])
+      const headerLineIdx = lines.findIndex((l) => l.startsWith('headers:'))
+      headers = lines[headerLineIdx].slice('headers:'.length).split('|').map((h) => h.trim())
+      const dataLine = lines.slice(headerLineIdx + 1).join('\n').trim()
+      values = dataLine ? (dataLine.includes('|') ? dataLine.split('|').map((v) => v.trim()) : [dataLine]) : []
+    } else {
+      const parts = content.split('|').map((p) => p.trim())
+
+      // Check if second part starts with "headers:" → Format 3
+      if (parts.length >= 2 && parts[1].startsWith('headers:')) {
+        tableName = generateSlug(parts[0])
+        // Everything after "headers:" in the remaining parts are header names
+        const headerStr = parts.slice(1).join('|')
+        headers = headerStr.slice('headers:'.length).split('|').map((h) => h.trim())
+        values = [] // Headers only, no data row
+      } else if (parts.length >= 3) {
+        // Format 4: table_name | val1 | val2
+        tableName = generateSlug(parts[0])
+        values = parts.slice(1)
+      } else if (parts.length === 2) {
+        tableName = generateSlug(parts[0])
+        values = [parts[1]]
+      } else {
+        // Format 5: no pipes
+        tableName = topic
+        values = [content]
+      }
+    }
+
+    const tableFile = join(dir, `${tableName}.md`)
+
+    if (!existsSync(tableFile)) {
+      // Create new table
+      const fm: Frontmatter = {
+        type: 'table',
+        topic,
+        project: ws.project,
+        workspace: ws.workspace,
+        updated: date,
+      }
+
+      const headerRow = headers
+        ? headers
+        : values.length === 1
+          ? ['Fecha', 'Entrada']
+          : ['Fecha', ...values.map((_v, i) => `Col ${i + 1}`)]
+
+      const headerLine = `| ${headerRow.join(' | ')} |`
+      const separatorLine = `| ${headerRow.map(() => '---').join(' | ')} |`
+
+      let body = `${headerLine}\n${separatorLine}`
+
+      // Only add data row if we have values (headers-only creates empty table)
+      if (values.length > 0) {
+        // With custom headers: don't auto-prepend date (user controls columns)
+        // Without custom headers: auto-prepend date as first column
+        const dataRow = headers
+          ? `| ${values.join(' | ')} |`
+          : values.length === 1
+            ? `| ${date} | ${values[0]} |`
+            : `| ${date} | ${values.join(' | ')} |`
+        body += `\n${dataRow}`
+      }
+
+      writeEntry(tableFile, fm, body)
+    } else {
+      // Append row to existing table — check if table has custom headers
+      const fileContent = readFileSync(tableFile, 'utf-8')
+
+      // Detect if first header column is "Fecha" (auto-generated) or custom
+      const firstHeaderMatch = fileContent.match(/^\| *([^|]+)/m)
+      const hasAutoDate = firstHeaderMatch && firstHeaderMatch[1].trim() === 'Fecha'
+
+      const dataRow = hasAutoDate
+        ? values.length === 1
+          ? `| ${date} | ${values[0]} |`
+          : `| ${date} | ${values.join(' | ')} |`
+        : `| ${values.join(' | ')} |`
+
+      const updatedContent = fileContent.replace(
+        /^updated:.*$/m,
+        `updated: ${date}`,
+      ) + '\n' + dataRow
+
+      writeFileSync(tableFile, updatedContent, 'utf-8')
+    }
+
+    const id = `${tableName}-${Date.now()}`
+    const entry: NoteEntry = {
+      id, type: 'note', date, project: ws.project, workspace: ws.workspace,
+      topic, tags: [topic], content,
     }
     this.ensureDashboard()
     return entry
@@ -840,7 +990,7 @@ export class ObsidianStorage implements StorageBackend {
       const todosPath = join(projectDir, 'todos.md')
       if (!existsSync(todosPath)) return
 
-      const { lines, fm } = this.readTodosFileAt(todosPath)
+      const { lines, fm } = this.readTodosFileAt(todosPath, { workspace, project })
       const todosDate = String(fm.updated || '')
       if (from && todosDate < from.split('T')[0]) return
       if (to && todosDate > to.split('T')[0]) return
@@ -864,37 +1014,80 @@ export class ObsidianStorage implements StorageBackend {
   // ── Topics ──
 
   getTopics(): TopicInfo[] {
+    // Start with persisted custom topics
+    const customTopics = this.loadCustomTopics()
+    const topicMap = new Map<string, { kind: TopicInfo['kind']; folder: string | null; description: string | null; showInIndex: boolean }>()
+
+    for (const ct of customTopics) {
+      topicMap.set(ct.name, { kind: ct.kind, folder: ct.folder, description: ct.description, showInIndex: ct.showInIndex ?? true })
+    }
+
+    // Discover topics from files
     const files = globMarkdown(this.baseDir)
-    const topicSet = new Map<string, number>()
+    const discovered = new Set<string>()
 
     for (const file of files) {
-      if (basename(file) === 'todos.md') continue
+      if (basename(file) === 'todos.md' || file.endsWith('.json')) continue
       const { frontmatter: fm } = readEntry(file)
       if (fm.topic) {
-        const name = String(fm.topic)
-        topicSet.set(name, (topicSet.get(name) || 0) + 1)
+        discovered.add(String(fm.topic))
       }
     }
 
-    // Contar topics de todos.md
-    this.countTodoTopics(topicSet)
+    // Merge discovered with custom (custom takes precedence for kind/folder)
+    for (const name of discovered) {
+      if (!topicMap.has(name)) {
+        topicMap.set(name, { kind: 'note', folder: null, description: null, showInIndex: true })
+      }
+    }
 
-    return Array.from(topicSet.entries())
+    return Array.from(topicMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([name]) => ({
+      .map(([name, info]) => ({
         id: name,
         name,
-        description: null,
+        description: info.description,
         is_custom: true,
+        kind: info.kind,
+        folder: info.folder,
+        showInIndex: info.showInIndex,
       }))
   }
 
-  insertTopic(name: string, _description?: string): TopicInfo {
+  insertTopic(name: string, _description?: string, kind?: TopicInfo['kind'], folder?: string, showInIndex?: boolean): TopicInfo {
+    const shouldShow = showInIndex !== false
+
+    // Always persist custom topics with metadata
+    const custom = this.loadCustomTopics()
+    const existing = custom.findIndex((t) => t.name === name)
+    const entry = { name, description: _description || null, kind: kind ?? 'note', folder: folder ?? null, showInIndex: shouldShow }
+    if (existing >= 0) {
+      custom[existing] = entry
+    } else {
+      custom.push(entry)
+    }
+    this.saveCustomTopics(custom)
+
+    // Create the folder immediately if configured
+    if (folder) {
+      const ws = this.getWorkspace()
+      const dir = join(this.projectDir(ws), folder)
+      ensureDir(dir)
+    }
+
+    // Regenerate dashboard to include new topic
+    if (shouldShow && folder) {
+      this.generateDashboard(true)
+    }
+
     return {
       id: name,
       name,
       description: _description || null,
       is_custom: true,
+      kind: kind ?? 'note',
+      folder: folder ?? null,
+      showInIndex: shouldShow,
     }
   }
 
@@ -921,6 +1114,27 @@ export class ObsidianStorage implements StorageBackend {
     }
 
     const relPath = `${ws.workspace}/${ws.project}`
+
+    // Build custom topic sections
+    const customTopics = this.loadCustomTopics().filter((t) => t.showInIndex && t.folder)
+
+    let customSections = ''
+    let customLinks = ''
+    for (const topic of customTopics) {
+      const icon = topic.kind === 'todo' ? '\u{2705}' : '\u{1F4C1}'
+      const queryType = topic.kind === 'todo' ? 'TASK' : 'LIST'
+      customSections += `
+## ${icon} ${topic.name}
+
+\`\`\`dataview
+${queryType}
+FROM "${relPath}/${topic.folder}"
+SORT file.name DESC
+LIMIT 10
+\`\`\`
+`
+      customLinks += `- [[${topic.folder}]]\n`
+    }
 
     const content = `# ${ws.project}
 
@@ -958,7 +1172,7 @@ FROM "${relPath}/debug"
 SORT file.name DESC
 LIMIT 10
 \`\`\`
-
+${customSections}
 ## \u{1F517} Enlaces r\u00E1pidos
 
 - [[todos]]
@@ -966,7 +1180,7 @@ LIMIT 10
 - [[decisions]]
 - [[debug]]
 - [[standups]]
-`
+${customLinks}`
 
     writeFileSync(dashboardPath, content, 'utf-8')
     return { path: dashboardPath, created: true }
@@ -1567,7 +1781,13 @@ tags: [standup]
     return join(this.baseDir, ws.workspace, ws.project)
   }
 
-  private typeDir(ws: WorkspaceInfo, type: EntryType): string {
+  private typeDir(ws: WorkspaceInfo, type: EntryType, topicFolder?: string | null): string {
+    // Custom folder from topic takes precedence
+    if (topicFolder) {
+      const dir = join(this.projectDir(ws), topicFolder)
+      ensureDir(dir)
+      return dir
+    }
     // Para TODOs ya no creamos carpeta todos/
     if (type === 'todo') {
       const dir = this.projectDir(ws)
@@ -1577,6 +1797,41 @@ tags: [standup]
     const dir = join(this.projectDir(ws), TYPE_FOLDERS[type])
     ensureDir(dir)
     return dir
+  }
+
+  /** Persisted custom topics config */
+  private getCustomTopicsPath(): string {
+    return join(this.baseDir, 'topics.json')
+  }
+
+  private loadCustomTopics(): Array<{ name: string; description: string | null; kind: TopicInfo['kind']; folder: string | null; showInIndex: boolean }> {
+    const path = this.getCustomTopicsPath()
+    if (!existsSync(path)) return []
+    try {
+      return JSON.parse(readFileSync(path, 'utf-8'))
+    } catch {
+      return []
+    }
+  }
+
+  private saveCustomTopics(topics: Array<{ name: string; description: string | null; kind: TopicInfo['kind']; folder: string | null; showInIndex: boolean }>): void {
+    const path = this.getCustomTopicsPath()
+    ensureDir(dirname(path))
+    writeFileSync(path, JSON.stringify(topics, null, 2), 'utf-8')
+  }
+
+  /** Get the custom folder for a topic (if configured), null otherwise */
+  private getTopicFolder(topicName: string): string | null {
+    const custom = this.loadCustomTopics()
+    const match = custom.find((t) => t.name === topicName)
+    return match?.folder ?? null
+  }
+
+  /** Get the kind for a topic ('note' or 'todo'), defaults to 'note' */
+  getTopicKind(topicName: string): TopicInfo['kind'] {
+    const custom = this.loadCustomTopics()
+    const match = custom.find((t) => t.name === topicName)
+    return match?.kind ?? 'note'
   }
 
   /** Ruta al archivo todos.md del proyecto */
@@ -1619,9 +1874,53 @@ tags: [standup]
 
   /** Escribe todos.md con frontmatter y lineas de TODOs */
   private writeTodosFile(path: string, fm: Frontmatter, lines: string[]): void {
-    ensureDir(join(path, '..'))
+    ensureDir(dirname(path))
     const content = serializeFrontmatter(fm) + '\n' + lines.join('\n') + '\n'
-    writeFileSync(path, content, 'utf-8')
+    this.withFileLock(path, () => {
+      writeFileSync(path, content, 'utf-8')
+    })
+  }
+
+  /**
+   * Simple file lock using a .lock file to prevent concurrent writes.
+   * Uses retry with exponential backoff for contention.
+   */
+  private withFileLock<T>(filePath: string, fn: () => T): T {
+    const lockPath = filePath + '.lock'
+    const maxRetries = 5
+    const baseDelay = 50
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        // O_EXCL ensures atomic creation — fails if file exists
+        const fd = openSync(lockPath, 'wx')
+        closeSync(fd)
+        try {
+          return fn()
+        } finally {
+          try { unlinkSync(lockPath) } catch { /* lock cleanup best-effort */ }
+        }
+      } catch (err: unknown) {
+        if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err
+
+        // Check if lock is stale (> 10s old)
+        try {
+          const stat = statSync(lockPath)
+          if (Date.now() - stat.mtimeMs > 10_000) {
+            unlinkSync(lockPath)
+            continue
+          }
+        } catch { /* lock disappeared, retry */ continue }
+
+        // Wait before retrying
+        const delay = baseDelay * Math.pow(2, attempt)
+        const start = Date.now()
+        while (Date.now() - start < delay) { /* busy wait */ }
+      }
+    }
+
+    // Fallback: proceed without lock after max retries
+    return fn()
   }
 
   /** Extrae contenido de un TODO legacy (formato viejo con checkbox en body) */
@@ -1738,22 +2037,6 @@ tags: [standup]
         const parsed = parseTodoLine(line)
         if (parsed?.topic) {
           tagCounts.set(parsed.topic, (tagCounts.get(parsed.topic) || 0) + 1)
-        }
-      }
-    })
-  }
-
-  /** Cuenta topics de TODOs en todos.md del vault */
-  private countTodoTopics(topicSet: Map<string, number>): void {
-    this.walkProjectDirs((projectDir) => {
-      const todosPath = join(projectDir, 'todos.md')
-      if (!existsSync(todosPath)) return
-
-      const { lines } = this.readTodosFileAt(todosPath)
-      for (const line of lines) {
-        const parsed = parseTodoLine(line)
-        if (parsed?.topic) {
-          topicSet.set(parsed.topic, (topicSet.get(parsed.topic) || 0) + 1)
         }
       }
     })

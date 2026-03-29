@@ -65,11 +65,14 @@ export function insertTopic(
   db: Database.Database,
   name: string,
   description?: string,
+  kind?: string,
+  folder?: string,
+  showInIndex?: boolean,
 ): Topic {
   const stmt = db.prepare(
-    'INSERT INTO topics (name, description, is_custom) VALUES (?, ?, 1)',
+    'INSERT INTO topics (name, description, is_custom, kind, folder, show_in_index) VALUES (?, ?, 1, ?, ?, ?)',
   )
-  const result = stmt.run(name, description ?? null)
+  const result = stmt.run(name, description ?? null, kind ?? 'note', folder ?? null, showInIndex === false ? 0 : 1)
   return db
     .prepare('SELECT * FROM topics WHERE id = ?')
     .get(result.lastInsertRowid) as Topic

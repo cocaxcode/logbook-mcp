@@ -1,24 +1,18 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { registerTopicsTool } from './tools/topics.js'
+
+// Tools (10)
 import { registerNoteTool } from './tools/note.js'
-import { registerTodoAddTool } from './tools/todo-add.js'
-import { registerTodoListTool } from './tools/todo-list.js'
-import { registerTodoDoneTool } from './tools/todo-done.js'
-import { registerTodoEditTool } from './tools/todo-edit.js'
-import { registerTodoRmTool } from './tools/todo-rm.js'
-import { registerLogTool } from './tools/log.js'
-import { registerSearchTool } from './tools/search.js'
-import { registerStandupTool } from './tools/standup.js'
-import { registerDecisionTool } from './tools/decision.js'
-import { registerDebugTool } from './tools/debug.js'
-import { registerTagsTool } from './tools/tags.js'
-import { registerTimelineTool } from './tools/timeline.js'
-import { registerMigrateTool } from './tools/migrate.js'
-import { registerSetupTool } from './tools/setup.js'
-import { registerInboxTool } from './tools/inbox.js'
-import { registerReviewTool } from './tools/review.js'
+import { registerTodoTool } from './tools/todo.js'
 import { registerEntryTool } from './tools/entry.js'
+import { registerQueryTool } from './tools/query.js'
+import { registerTopicsTool } from './tools/topics.js'
+import { registerTagsTool } from './tools/tags.js'
 import { registerRemindersTool } from './tools/reminders.js'
+import { registerReviewTool } from './tools/review.js'
+import { registerInboxTool } from './tools/inbox.js'
+import { registerSetupTool } from './tools/setup.js'
+
+// Resources
 import { registerRemindersResource } from './resources/reminders.js'
 
 declare const __PKG_VERSION__: string
@@ -28,18 +22,29 @@ const INSTRUCTIONS = `logbook-mcp es un cuaderno de bitácora para desarrollador
 
 FLUJO TÍPICO:
 1. Usa logbook_note para registrar hallazgos, ideas o progreso.
-2. Gestiona TODOs con logbook_todo_add/list/done/edit/rm.
-3. Registra decisiones arquitectónicas con logbook_decision (ADR).
-4. Documenta bugs resueltos con logbook_debug (error → causa → fix).
-5. Haz standups con logbook_standup (yesterday/today/blockers).
+2. Gestiona TODOs con logbook_todo (action: add/list/done/edit/rm).
+3. Registra decisiones arquitectónicas con logbook_entry (action: decision).
+4. Documenta bugs resueltos con logbook_entry (action: debug).
+5. Haz standups con logbook_entry (action: standup).
 
 COMPORTAMIENTO:
-- logbook_todo_list incluye TODOs manuales y del código (TODO/FIXME/HACK/BUG via git grep).
-- logbook_search usa FTS5 para búsqueda full-text rápida.
-- logbook_timeline muestra actividad cross-project y cross-workspace.
+- logbook_todo action:list incluye TODOs manuales y del código (TODO/FIXME/HACK/BUG via git grep).
+- logbook_query action:search usa FTS5 para búsqueda full-text rápida.
+- logbook_query action:timeline muestra actividad cross-project y cross-workspace.
 - Soporta modo SQLite (default) y Obsidian (archivos .md con frontmatter).
 - Topics predefinidos: feature, fix, chore, idea, decision, blocker, reminder.
-- logbook_todo_done con recordatorios recurrentes marca como hecho por hoy y vuelve automáticamente.`
+- logbook_todo action:done con recordatorios recurrentes marca como hecho por hoy y vuelve automáticamente.
+
+TOPICS CUSTOM:
+- Los topics custom pueden tener carpeta propia (folder) y tipo (kind: note, todo, table).
+- IMPORTANTE: Cuando el usuario pide crear una nota/TODO y el contenido encaja con un topic custom existente, SIEMPRE pasa el topic correspondiente para que se guarde en su carpeta. Usa logbook_topics action:list para ver los topics disponibles si no estás seguro.
+- kind=note: archivo individual en la carpeta del topic.
+- kind=todo: checkbox en archivo consolidado.
+- kind=table: tablas markdown dentro de la carpeta del topic. Formato del content:
+  - "nombre-tabla | valor1 | valor2 | valor3" → crea/añade fila en {folder}/nombre-tabla.md
+  - "headers:Versión|Entorno|Estado\nv1.2|prod|ok" → primera vez define headers, luego datos
+  - Sin | → tabla simple con columnas Fecha + Entrada
+  - Múltiples tablas en la misma carpeta: usa nombres diferentes antes del primer |`
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -49,28 +54,31 @@ export function createServer(): McpServer {
     instructions: INSTRUCTIONS,
   })
 
-  registerTopicsTool(server)
+  // ── Notes & Knowledge ──
   registerNoteTool(server)
-  registerTodoAddTool(server)
-  registerTodoListTool(server)
-  registerTodoDoneTool(server)
-  registerTodoEditTool(server)
-  registerTodoRmTool(server)
-  registerLogTool(server)
-  registerSearchTool(server)
-  registerStandupTool(server)
-  registerDecisionTool(server)
-  registerDebugTool(server)
+  registerTopicsTool(server)
   registerTagsTool(server)
-  registerTimelineTool(server)
-  registerMigrateTool(server)
-  registerSetupTool(server)
-  registerInboxTool(server)
-  registerReviewTool(server)
+
+  // ── TODO Management ──
+  registerTodoTool(server)
+
+  // ── Structured Entries (standup, decision, debug, list, edit, delete) ──
   registerEntryTool(server)
+
+  // ── Search & Discovery ──
+  registerQueryTool(server)
+
+  // ── Reminders ──
   registerRemindersTool(server)
 
-  // Resources
+  // ── Reviews & Inbox ──
+  registerReviewTool(server)
+  registerInboxTool(server)
+
+  // ── Admin ──
+  registerSetupTool(server)
+
+  // ── Resources ──
   registerRemindersResource(server)
 
   return server

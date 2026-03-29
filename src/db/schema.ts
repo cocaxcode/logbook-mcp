@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS topics (
   description TEXT,
   commit_prefix TEXT,
   is_custom INTEGER NOT NULL DEFAULT 0,
+  kind TEXT NOT NULL DEFAULT 'note',
+  folder TEXT,
+  show_in_index INTEGER NOT NULL DEFAULT 1,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -100,6 +103,10 @@ export const MIGRATIONS_SQL = `
 ALTER TABLE todos ADD COLUMN remind_at TEXT;
 ALTER TABLE todos ADD COLUMN remind_pattern TEXT;
 ALTER TABLE todos ADD COLUMN remind_last_done TEXT;
+-- Add kind and folder to topics (v0.8.2)
+ALTER TABLE topics ADD COLUMN kind TEXT NOT NULL DEFAULT 'note';
+ALTER TABLE topics ADD COLUMN folder TEXT;
+ALTER TABLE topics ADD COLUMN show_in_index INTEGER NOT NULL DEFAULT 1;
 `
 
 export const POST_MIGRATION_SQL = `

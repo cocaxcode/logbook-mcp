@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, readdirSync } from 'node:fs'
-import { join, basename } from 'node:path'
+import { join, basename, dirname } from 'node:path'
 import { parseFrontmatter, serializeFrontmatter } from './frontmatter.js'
 import type { Frontmatter, ParsedFile } from './frontmatter.js'
 
@@ -48,7 +48,7 @@ export function readEntry(path: string): ParsedFile {
  * Write a markdown file with frontmatter and body.
  */
 export function writeEntry(path: string, frontmatter: Frontmatter, body: string): void {
-  const dir = join(path, '..')
+  const dir = dirname(path)
   ensureDir(dir)
   const content = serializeFrontmatter(frontmatter) + '\n' + body
   writeFileSync(path, content, 'utf-8')

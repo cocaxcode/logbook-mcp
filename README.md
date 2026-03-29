@@ -11,7 +11,7 @@
   <a href="https://www.npmjs.com/package/@cocaxcode/logbook-mcp"><img src="https://img.shields.io/npm/dm/@cocaxcode/logbook-mcp.svg?style=flat-square" alt="npm downloads" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License" /></a>
   <img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
-  <img src="https://img.shields.io/badge/tools-15-blueviolet?style=flat-square" alt="15 tools" />
+  <img src="https://img.shields.io/badge/tools-10-blueviolet?style=flat-square" alt="10 tools" />
 </p>
 
 <p align="center">
@@ -32,7 +32,7 @@ logbook-mcp is an MCP server that turns your AI assistant into a persistent deve
 
 It auto-detects your git project, stores everything locally, and works with any MCP-compatible client: Claude Code, Claude Desktop, Cursor, Windsurf, VS Code, Codex CLI, or Gemini CLI. **All data stays on your machine — nothing is synced, nothing is tracked, nothing leaves your disk.** Notes are scoped per-project automatically, but you can search globally across all your projects at any time.
 
-Two storage modes: **SQLite** (default, zero config) or **Obsidian** (markdown files with frontmatter, visible in your Obsidian vault with Graph View, Dataview, Tasks, and Calendar).
+Two storage modes: **SQLite** (default, zero config) or **Obsidian** (markdown files with frontmatter, visible in your Obsidian vault with Graph View, Dataview, Tasks, and Calendar). Switching from SQLite to Obsidian **auto-migrates your data** on startup.
 
 ---
 
@@ -99,6 +99,12 @@ No commands to memorize. Just say what you need.
 claude mcp add --scope user logbook -- npx @cocaxcode/logbook-mcp@latest --mcp
 ```
 
+With Obsidian mode:
+
+```bash
+claude mcp add --scope user logbook -- npx @cocaxcode/logbook-mcp@latest --mcp --storage obsidian --dir "/path/to/vault/logbook"
+```
+
 ### Claude Desktop
 
 Add to your `claude_desktop_config.json`:
@@ -109,6 +115,23 @@ Add to your `claude_desktop_config.json`:
     "logbook-mcp": {
       "command": "npx",
       "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"]
+    }
+  }
+}
+```
+
+With Obsidian mode:
+
+```json
+{
+  "mcpServers": {
+    "logbook-mcp": {
+      "command": "npx",
+      "args": [
+        "@cocaxcode/logbook-mcp@latest", "--mcp",
+        "--storage", "obsidian",
+        "--dir", "/path/to/vault/logbook"
+      ]
     }
   }
 }
@@ -187,6 +210,31 @@ codex mcp add logbook-mcp -- npx @cocaxcode/logbook-mcp@latest --mcp
 
 ---
 
+## Configuration
+
+logbook-mcp supports three ways to configure storage, with this priority order:
+
+1. **CLI args** (highest priority): `--storage obsidian --dir "/path" --workspace "name"`
+2. **Environment variables**: `LOGBOOK_STORAGE`, `LOGBOOK_DIR`, `LOGBOOK_WORKSPACE`
+3. **Config file**: `~/.logbook/config.json` (auto-created on first run)
+
+```json
+{
+  "storage": "sqlite",
+  "dir": null,
+  "workspace": null,
+  "autoMigrate": true
+}
+```
+
+### Switching from SQLite to Obsidian
+
+Just change the config and restart. If `autoMigrate` is `true` (default), your existing SQLite data is automatically migrated to Obsidian on the next startup. No manual steps needed.
+
+You can also check the current status with `logbook_setup action:status`.
+
+---
+
 ## Features
 
 ### 7 built-in topics
@@ -204,6 +252,32 @@ Every note, TODO, and reminder is categorized automatically by your AI, or you c
 | **reminder** | Time-based reminders | — |
 
 Custom topics can be created at any time — just say *"create a topic called security"*.
+
+### Custom topics with type, folder, and dashboard
+
+Topics can define their own behavior (`kind`), Obsidian folder, and whether they appear in the project dashboard (`index.md`):
+
+- **kind: `note`** (default) — each entry is an individual `.md` file
+- **kind: `todo`** — entries are checkboxes in a consolidated `.md` file
+- **show_in_index: `true`** (default) — adds a Dataview section and quick link to `index.md`
+- **show_in_index: `false`** — topic exists but is hidden from the dashboard
+
+```
+"Create a topic called incident with its own folder"
+→ logbook_topics action:add name:"incident" kind:"note" folder:"incidents"
+→ Entries saved to: project/incidents/2026-03-24-server-down.md
+→ Dashboard updated with Incidents section
+
+"Create a topic called sprint-task as todo type"
+→ logbook_topics action:add name:"sprint-task" kind:"todo" folder:"sprint"
+→ Entries saved to: project/sprint.md (as checkboxes)
+
+"Create a private topic not shown in the dashboard"
+→ logbook_topics action:add name:"internal" kind:"note" folder:"internal" show_in_index:false
+→ Entries saved to: project/internal/ (not visible in index.md)
+```
+
+Without a `folder`, entries go to the default `notes/` or `todos/` directory. The dashboard (`index.md`) is auto-regenerated when a topic with `show_in_index: true` and `folder` is created.
 
 ### Code TODO scanning
 
@@ -260,30 +334,19 @@ logbook-mcp auto-detects which git project you're in via `git rev-parse`. No con
 
 ## Tool Reference
 
-| Category | Tools | Count |
-|----------|-------|:-----:|
-| **Activity** | `logbook_log` `logbook_search` `logbook_timeline` | 3 |
-| **Notes** | `logbook_note` `logbook_standup` `logbook_decision` `logbook_debug` | 4 |
-| **TODOs** | `logbook_todo_add` `logbook_todo_list` `logbook_todo_done` `logbook_todo_edit` `logbook_todo_rm` | 5 |
-| **Config** | `logbook_topics` `logbook_tags` | 2 |
-| **Migration** | `logbook_migrate` | 1 |
-| **Resource** | `logbook://reminders` | — |
-| | | **15 tools + 1 resource** |
-
-<details>
-<summary><code>logbook_log</code> — Activity for a period</summary>
-
-Shows notes, completed TODOs, and resolved code TODOs for a time range.
-
-| Param | Type | Default | Description |
-|-------|------|---------|-------------|
-| `period` | `today` `yesterday` `week` `month` | `today` | Quick date filter |
-| `from` | `YYYY-MM-DD` | — | Custom start date (overrides period) |
-| `to` | `YYYY-MM-DD` | — | Custom end date |
-| `type` | `all` `notes` `todos` | `all` | Filter by entry type |
-| `topic` | string | — | Filter by topic name |
-| `scope` | `project` `global` | `project` | Current project or all |
-</details>
+| Tool | Actions | Description |
+|------|---------|-------------|
+| `logbook_note` | — | Add a note with optional topic |
+| `logbook_todo` | `add` `list` `done` `edit` `rm` | Full TODO management |
+| `logbook_entry` | `list` `edit` `delete` `standup` `decision` `debug` | Structured entries (ADRs, debug sessions, standups) |
+| `logbook_query` | `search` `log` `timeline` | Full-text search, activity log, cross-project timeline |
+| `logbook_topics` | `list` `add` | Manage topics (custom kind, folder, dashboard visibility) |
+| `logbook_tags` | — | List tags with counts |
+| `logbook_reminders` | — | View pending reminders |
+| `logbook_review` | — | Weekly/monthly review with stats |
+| `logbook_inbox` | `list` `process` | Quick notes inbox (Obsidian mode) |
+| `logbook_setup` | `init` `migrate` `status` | Admin: init vault, migrate data, check status |
+| | | **10 tools + 1 resource** |
 
 <details>
 <summary><code>logbook_note</code> — Add a note</summary>
@@ -295,20 +358,20 @@ Shows notes, completed TODOs, and resolved code TODOs for a time range.
 </details>
 
 <details>
-<summary><code>logbook_todo_add</code> — Create TODOs</summary>
+<summary><code>logbook_todo</code> — Full TODO management</summary>
+
+**action: `add`** — Create TODOs
 
 | Param | Type | Description |
 |-------|------|-------------|
 | `content` | string | Single TODO content (max 2000 chars) |
+| `items` | array | Multiple TODOs: `[{content, topic?, priority?, remind_at?, remind_pattern?}]` (max 50) |
 | `topic` | string | Topic — auto-inferred or auto-created |
 | `priority` | `low` `normal` `high` `urgent` | Priority (default: normal) |
 | `remind_at` | `YYYY-MM-DD` | One-time reminder date |
 | `remind_pattern` | string | Recurring: `daily`, `weekdays`, `weekly:N`, `monthly:N` |
-| `items` | array | Multiple TODOs: `[{content, topic?, priority?, remind_at?, remind_pattern?}]` (max 50) |
-</details>
 
-<details>
-<summary><code>logbook_todo_list</code> — List TODOs</summary>
+**action: `list`** — List TODOs grouped by topic
 
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -317,61 +380,117 @@ Shows notes, completed TODOs, and resolved code TODOs for a time range.
 | `priority` | `low` `normal` `high` `urgent` | — | Filter by priority |
 | `source` | `all` `manual` `code` | `all` | Manual DB or code comments |
 | `scope` | `project` `global` | `project` | Current project or all |
-| `from` / `to` | `YYYY-MM-DD` | — | Date range filter |
-</details>
 
-<details>
-<summary><code>logbook_todo_done</code> — Mark as done / undo</summary>
+**action: `done`** — Mark as done / undo
 
 | Param | Type | Description |
 |-------|------|-------------|
 | `ids` | number or number[] | ID(s) to mark |
 | `undo` | boolean | If true, sets back to pending (default: false) |
 
-For recurring reminders, "done" means acknowledged for today. It will reappear on the next matching day.
-</details>
-
-<details>
-<summary><code>logbook_todo_edit</code> — Edit a TODO</summary>
+**action: `edit`** — Edit a TODO
 
 | Param | Type | Description |
 |-------|------|-------------|
 | `id` | number | TODO ID to edit |
 | `content` | string | New content |
-| `topic` | string | New topic (auto-created if new) |
+| `topic` | string | New topic |
 | `priority` | `low` `normal` `high` `urgent` | New priority |
-</details>
 
-<details>
-<summary><code>logbook_todo_rm</code> — Delete TODOs</summary>
+**action: `rm`** — Delete TODOs
 
 | Param | Type | Description |
 |-------|------|-------------|
 | `ids` | number or number[] | ID(s) to delete permanently |
-
-Use this to stop recurring reminders permanently.
 </details>
 
 <details>
-<summary><code>logbook_search</code> — Full-text search</summary>
+<summary><code>logbook_entry</code> — Structured entries</summary>
+
+**action: `standup`** — Daily standup
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `yesterday` | string | Yes | What was done yesterday |
+| `today` | string | Yes | What will be done today |
+| `blockers` | string | No | Current blockers |
+| `topic` | string | No | Topic |
+
+**action: `decision`** — Architecture Decision Record (ADR)
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | string | Yes | Decision title |
+| `context` | string | Yes | Why this decision is needed |
+| `options` | string[] | Yes | Options considered |
+| `decision` | string | Yes | Decision taken |
+| `consequences` | string | Yes | Consequences of the decision |
+| `topic` | string | No | Topic (default: decision) |
+
+**action: `debug`** — Debug session
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | string | Yes | Bug/error title |
+| `error` | string | Yes | Error description |
+| `cause` | string | Yes | Root cause |
+| `fix` | string | Yes | Solution applied |
+| `file` | string | No | Attachment path |
+| `topic` | string | No | Topic (default: fix) |
+
+**action: `list`** — List entries by type
 
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| `query` | string | — | Search text (required, max 500 chars) |
+| `type` | `note` `decision` `debug` `standup` `review` | — | Entry type (required) |
+| `scope` | `project` `global` | `project` | Current project or all |
+| `limit` | number | 20 | Max results |
+
+**action: `edit`** / **action: `delete`** — Modify or remove entries by ID
+</details>
+
+<details>
+<summary><code>logbook_query</code> — Search and activity</summary>
+
+**action: `search`** — Full-text search
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `query` | string | — | Search text (required) |
 | `type` | `all` `notes` `todos` | `all` | Search scope |
 | `topic` | string | — | Filter by topic |
 | `scope` | `project` `global` | `project` | Project or global |
 | `limit` | number | 20 | Max results |
-</details>
 
-<details>
-<summary><code>logbook_topics</code> — Manage topics</summary>
+**action: `log`** — Activity for a period
 
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| `action` | `list` `add` | `list` | List or create topics |
-| `name` | string | — | New topic name (lowercase, `[a-z0-9-]` only, max 50 chars) |
-| `description` | string | — | Topic description (max 200 chars) |
+| `period` | `today` `yesterday` `week` `month` | `today` | Quick date filter |
+| `from` / `to` | `YYYY-MM-DD` | — | Custom date range |
+| `type` | `all` `notes` `todos` | `all` | Filter by type |
+| `scope` | `project` `global` | `project` | Current project or all |
+
+**action: `timeline`** — Cross-project timeline
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `period` | `today` `yesterday` `week` `month` | `week` | Time range |
+| `workspace` | string | — | Filter by workspace |
+</details>
+
+<details>
+<summary><code>logbook_setup</code> — Admin tools</summary>
+
+**action: `status`** — Show current configuration and migration state
+
+**action: `init`** — Initialize Obsidian vault (dashboard, templates, inbox)
+
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `force` | boolean | false | Regenerate even if files exist |
+
+**action: `migrate`** — Manually migrate SQLite data to Obsidian (requires obsidian mode)
 </details>
 
 ---
@@ -389,20 +508,21 @@ All data lives in a single SQLite database at `~/.logbook/logbook.db`. Zero conf
 
 ### Obsidian mode
 
-Writes markdown files with YAML frontmatter directly to your Obsidian vault. Configure with environment variables:
+Writes markdown files with YAML frontmatter directly to your Obsidian vault.
+
+Configure via CLI args (recommended), config file, or env vars:
+
+```bash
+# CLI args (most reliable, especially on Windows)
+claude mcp add logbook -- npx @cocaxcode/logbook-mcp@latest --mcp --storage obsidian --dir "/path/to/vault/logbook"
+```
 
 ```json
+// Config file: ~/.logbook/config.json
 {
-  "mcpServers": {
-    "logbook-mcp": {
-      "command": "npx",
-      "args": ["@cocaxcode/logbook-mcp@latest", "--mcp"],
-      "env": {
-        "LOGBOOK_STORAGE": "obsidian",
-        "LOGBOOK_DIR": "/path/to/your/vault/logbook"
-      }
-    }
-  }
+  "storage": "obsidian",
+  "dir": "/path/to/vault/logbook",
+  "autoMigrate": true
 }
 ```
 
@@ -413,10 +533,10 @@ vault/logbook/
 ├── cocaxcode/
 │   ├── cocaxcode-api/
 │   │   ├── notes/          ← logbook_note
-│   │   ├── todos/          ← logbook_todo_add
-│   │   ├── decisions/      ← logbook_decision
-│   │   ├── debug/          ← logbook_debug
-│   │   ├── standups/       ← logbook_standup
+│   │   ├── todos/          ← logbook_todo
+│   │   ├── decisions/      ← logbook_entry action:decision
+│   │   ├── debug/          ← logbook_entry action:debug
+│   │   ├── standups/       ← logbook_entry action:standup
 │   │   └── attachments/    ← copied files
 │   └── cocaxcode-web/
 ├── optimus/
@@ -436,12 +556,12 @@ priority: high
 due: 2026-03-25
 tags: [auth, urgent]
 ---
-- [ ] Fix JWT refresh token 🔼 📅 2026-03-25
+- [ ] Fix JWT refresh token
 ```
 
 **Recommended Obsidian plugins:** Dataview (SQL-like queries), Calendar (date view), Tasks (checkbox management), Graph View (built-in, shows connections via `[[wikilinks]]`).
 
-**Migration from SQLite:** Run `logbook_migrate` with Obsidian mode enabled to convert existing data.
+**Auto-migration:** When switching from SQLite to Obsidian, existing data is migrated automatically on startup (if `autoMigrate: true`). You can also run `logbook_setup action:migrate` manually.
 
 > **Tip:** Combine with [Self-hosted LiveSync](https://github.com/vrtmrz/obsidian-livesync) + CouchDB on your VPS to sync your vault across PC, Android, and iOS for free.
 
@@ -452,18 +572,20 @@ tags: [auth, urgent]
 ```
 src/
 ├── index.ts              # Entry: --mcp → server, else CLI
-├── server.ts             # createServer() — 15 tools + 1 resource
+├── server.ts             # createServer() — 10 tools + 1 resource
+├── config.ts             # Config resolution (args > env > file > defaults)
+├── auto-migrate.ts       # Auto SQLite → Obsidian migration on startup
 ├── cli.ts                # CLI (help, version)
 ├── types.ts              # Shared interfaces
 ├── storage/
 │   ├── types.ts          # StorageBackend interface
-│   ├── index.ts          # getStorage() factory (sqlite | obsidian)
+│   ├── index.ts          # getStorage() factory (uses resolveConfig)
 │   ├── sqlite/           # SQLite backend (wraps db/)
 │   └── obsidian/         # Obsidian backend (markdown + frontmatter)
 ├── db/                   # SQLite internals
 ├── git/                  # Git repo detection + code TODO scanning
 ├── resources/            # MCP Resource: logbook://reminders
-└── tools/                # 15 MCP tools (one file each)
+└── tools/                # 10 MCP tools (one file each)
 ```
 
 **Stack:** TypeScript &middot; MCP SDK &middot; better-sqlite3 &middot; Zod &middot; tsup

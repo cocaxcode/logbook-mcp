@@ -1,34 +1,28 @@
-import type { StorageBackend, StorageMode } from './types.js'
+import type { StorageBackend } from './types.js'
+import type { StorageMode } from '../config.js'
+import { resolveConfig } from '../config.js'
 import { SqliteStorage } from './sqlite/index.js'
 import { ObsidianStorage } from './obsidian/index.js'
 
-const VALID_MODES = ['sqlite', 'obsidian'] as const
-
 let instance: StorageBackend | null = null
+let resolvedMode: StorageMode | null = null
 
 export function getStorageMode(): StorageMode {
-  const mode = process.env.LOGBOOK_STORAGE?.toLowerCase()
-  if (!mode) return 'sqlite'
-  if (mode === 'obsidian') return 'obsidian'
-  if (mode === 'sqlite') return 'sqlite'
-  throw new Error(
-    `LOGBOOK_STORAGE invalido: "${mode}". Valores validos: ${VALID_MODES.join(', ')}`,
-  )
+  if (resolvedMode) return resolvedMode
+  const config = resolveConfig()
+  resolvedMode = config.storage
+  return resolvedMode
 }
 
 export function getStorage(): StorageBackend {
   if (instance) return instance
 
-  const mode = getStorageMode()
+  const config = resolveConfig()
+  resolvedMode = config.storage
 
-  if (mode === 'obsidian') {
-    const dir = process.env.LOGBOOK_DIR
-    if (!dir) {
-      throw new Error(
-        'LOGBOOK_DIR es requerido cuando LOGBOOK_STORAGE=obsidian. Debe apuntar a la carpeta del vault de Obsidian.',
-      )
-    }
-    instance = new ObsidianStorage(dir)
+  if (config.storage === 'obsidian') {
+    // dir is guaranteed non-null by resolveConfig() validation
+    instance = new ObsidianStorage(config.dir!)
   } else {
     instance = new SqliteStorage()
   }
@@ -38,4 +32,7 @@ export function getStorage(): StorageBackend {
 
 export function resetStorage(): void {
   instance = null
+  resolvedMode = null
 }
+
+export type { StorageMode }

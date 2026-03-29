@@ -486,17 +486,23 @@ export class SqliteStorage implements StorageBackend {
       name: t.name,
       description: t.description,
       is_custom: t.is_custom === 1,
+      kind: (t.kind ?? 'note') as TopicInfo['kind'],
+      folder: t.folder ?? null,
+      showInIndex: (t.show_in_index ?? 1) === 1,
     }))
   }
 
-  insertTopic(name: string, description?: string): TopicInfo {
+  insertTopic(name: string, description?: string, kind?: TopicInfo['kind'], folder?: string, showInIndex?: boolean): TopicInfo {
     const db = getDb()
-    const topic = dbInsertTopic(db, name, description)
+    const topic = dbInsertTopic(db, name, description, kind, folder, showInIndex)
     return {
       id: toEntryId(topic.id),
       name: topic.name,
       description: topic.description,
       is_custom: topic.is_custom === 1,
+      kind: (topic.kind ?? 'note') as TopicInfo['kind'],
+      folder: topic.folder ?? null,
+      showInIndex: (topic.show_in_index ?? 1) === 1,
     }
   }
 

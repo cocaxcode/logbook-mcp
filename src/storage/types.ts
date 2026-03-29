@@ -190,11 +190,16 @@ export interface TimelineEntry {
   summary: string
 }
 
+export type TopicKind = 'note' | 'todo' | 'table'
+
 export interface TopicInfo {
   id: EntryId
   name: string
   description: string | null
   is_custom: boolean
+  kind: TopicKind
+  folder: string | null
+  showInIndex: boolean
 }
 
 export interface ReminderGroup {
@@ -241,7 +246,7 @@ export interface StorageBackend {
 
   // Topics
   getTopics(): TopicInfo[]
-  insertTopic(name: string, description?: string): TopicInfo
+  insertTopic(name: string, description?: string, kind?: TopicKind, folder?: string, showInIndex?: boolean): TopicInfo
 
   // Code TODOs (only meaningful in SQLite, obsidian returns [])
   getCodeTodos(repoPath: string): CodeTodo[]

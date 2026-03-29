@@ -28,6 +28,9 @@ export interface Topic {
   description: string | null
   commit_prefix: string | null
   is_custom: number // SQLite boolean: 0 | 1
+  kind: string      // 'note' | 'todo'
+  folder: string | null
+  show_in_index: number // SQLite boolean: 0 | 1
   created_at: string
 }
 

@@ -16,12 +16,14 @@ Cuaderno de bitácora del developer via MCP. Notas, TODOs y code TODOs sin salir
 ```
 src/
 ├── index.ts          # Entry: --mcp → server, else CLI
-├── server.ts         # createServer() factory — registra 15 tools
+├── server.ts         # createServer() factory — registra 10 tools
 ├── cli.ts            # CLI básico (help, version)
+├── config.ts         # Config file + resolución (args > env > file > defaults)
+├── auto-migrate.ts   # Auto-migración SQLite → Obsidian al arranque
 ├── types.ts          # Interfaces compartidas + re-exports de storage
 ├── storage/
 │   ├── types.ts      # Interfaz StorageBackend + tipos compartidos
-│   ├── index.ts      # Factory getStorage() singleton (sqlite | obsidian)
+│   ├── index.ts      # Factory getStorage() singleton (usa resolveConfig)
 │   ├── sqlite/
 │   │   └── index.ts  # SqliteStorage implements StorageBackend
 │   └── obsidian/
@@ -39,24 +41,56 @@ src/
 ├── git/
 │   ├── detect-repo.ts # Auto-detección de repo via git rev-parse
 │   └── code-todos.ts  # Scan TODO/FIXME/HACK/BUG via git grep
-├── tools/            # 15 MCP tools (1 archivo por tool)
+├── tools/            # 10 MCP tools (1 archivo por tool)
+│   ├── note.ts       # logbook_note — añadir nota
+│   ├── todo.ts       # logbook_todo — CRUD completo (add/list/done/edit/rm)
+│   ├── entry.ts      # logbook_entry — entradas estructuradas (list/edit/delete/standup/decision/debug)
+│   ├── query.ts      # logbook_query — buscar y consultar (search/log/timeline)
+│   ├── topics.ts     # logbook_topics — listar/crear topics
+│   ├── tags.ts       # logbook_tags — listar tags
+│   ├── reminders.ts  # logbook_reminders — recordatorios pendientes
+│   ├── review.ts     # logbook_review — review semanal/mensual
+│   ├── inbox.ts      # logbook_inbox — bandeja de entrada
+│   └── setup.ts      # logbook_setup — admin (init/migrate/status)
 └── resources/
     └── reminders.ts  # MCP resource: logbook://reminders
 ```
 
-## Storage Modes
+## Configuration
 
-### SQLite (default)
-```
-LOGBOOK_STORAGE=sqlite  # o sin definir
-```
-Almacena en `~/.logbook/logbook.db`. FTS5 para búsqueda. Como siempre ha funcionado.
+Prioridad de resolución: CLI args > env vars > config file > defaults.
 
-### Obsidian
+### Config file: `~/.logbook/config.json`
+```json
+{
+  "storage": "sqlite",
+  "dir": null,
+  "workspace": null,
+  "autoMigrate": true
+}
+```
+
+### CLI args
+```
+--storage obsidian --dir "C:/vault/logbook" --workspace "myteam"
+```
+
+### Env vars
 ```
 LOGBOOK_STORAGE=obsidian
 LOGBOOK_DIR=/ruta/al/vault/logbook
+LOGBOOK_WORKSPACE=myteam
 ```
+
+### Auto-migración
+Al arrancar con storage=obsidian, si existe `~/.logbook/logbook.db` con datos y no hay marker `.migrated`, migra automáticamente notes + todos a Obsidian.
+
+## Storage Modes
+
+### SQLite (default)
+Almacena en `~/.logbook/logbook.db`. FTS5 para búsqueda.
+
+### Obsidian
 Escribe archivos `.md` con frontmatter YAML. Estructura:
 ```
 vault/logbook/
@@ -69,26 +103,21 @@ vault/logbook/
 │   │   ├── standups/
 │   │   └── attachments/
 │   └── cocaxcode-web/
-├── optimus/
-│   └── optimus-hub/
 ```
-
-Autodetección: workspace del path del repo (`/projects/` → segmento anterior). Proyecto = nombre del repo.
 
 ## Key Patterns
 
 - **StorageBackend**: interfaz que abstraen SQLite y Obsidian. `getStorage()` singleton.
+- **Config**: `resolveConfig()` centraliza args > env > file > defaults
 - **Factory**: `createServer()` registra tools con `registerXyzTool(server)`
 - **Tool handler**: try-catch, return `{ content: [...] }` o `{ isError: true, content: [...] }`
-- **Frontmatter parser**: zero deps, línea por línea, soporta string/number/boolean/array/date
-- **Wikilinks**: envuelve nombres de proyecto en `[[]]` automáticamente
-- **Code TODOs**: `git grep` en demanda, sync de snapshots (solo SQLite)
-- **Sin AI provider**: devuelve datos crudos, el AI client resume
+- **Consolidated tools**: tools con `action` param y switch interno. Runtime validation per action.
+- **Auto-migrate**: en startup, antes de createServer()
 
 ## Commands
 
 ```bash
-npm test        # Vitest (141 tests)
+npm test        # Vitest (151 tests)
 npm run build   # tsup → dist/
 npm run typecheck # tsc --noEmit
 npm run inspector # MCP Inspector para probar tools
@@ -101,25 +130,20 @@ npm run inspector # MCP Inspector para probar tools
 - Single quotes, no semicolons, trailing commas (.prettierrc)
 - `console.error()` para logging (stdout reservado para MCP)
 
-## 15 MCP Tools
+## 10 MCP Tools
 
-| Tool | Función |
-|------|---------|
-| `logbook_note` | Añadir nota con topic |
-| `logbook_todo_add` | Crear uno o varios TODOs |
-| `logbook_todo_list` | Listar TODOs agrupados por topic (manual + code) |
-| `logbook_todo_done` | Marcar como hecho/undo |
-| `logbook_todo_edit` | Editar TODO |
-| `logbook_todo_rm` | Eliminar TODO |
-| `logbook_log` | Actividad: notas + TODOs completados por periodo |
-| `logbook_search` | Búsqueda full-text |
-| `logbook_topics` | Listar/crear topics |
-| `logbook_standup` | Standup diario (yesterday/today/blockers) |
-| `logbook_decision` | Decision arquitectónica ADR |
-| `logbook_debug` | Sesión de debug con adjuntos |
-| `logbook_tags` | Listar/filtrar tags del vault |
-| `logbook_timeline` | Timeline cross-project/workspace |
-| `logbook_migrate` | Migrar datos SQLite → markdown |
+| Tool | Función | Actions |
+|------|---------|---------|
+| `logbook_note` | Añadir nota con topic | — |
+| `logbook_todo` | CRUD completo de TODOs | add, list, done, edit, rm |
+| `logbook_entry` | Entradas estructuradas | list, edit, delete, standup, decision, debug |
+| `logbook_query` | Buscar y consultar | search, log, timeline |
+| `logbook_topics` | Listar/crear topics | list, add |
+| `logbook_tags` | Listar/filtrar tags | — |
+| `logbook_reminders` | Recordatorios pendientes | — |
+| `logbook_review` | Review semanal/mensual | — |
+| `logbook_inbox` | Bandeja de entrada | list, process |
+| `logbook_setup` | Administración | init, migrate, status |
 
 ## 1 MCP Resource
 

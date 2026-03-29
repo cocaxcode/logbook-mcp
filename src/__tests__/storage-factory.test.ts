@@ -3,6 +3,7 @@ import { getStorageMode, resetStorage } from '../storage/index.js'
 
 describe('getStorageMode', () => {
   const originalStorage = process.env.LOGBOOK_STORAGE
+  const originalDir = process.env.LOGBOOK_DIR
 
   afterEach(() => {
     if (originalStorage !== undefined) {
@@ -10,11 +11,16 @@ describe('getStorageMode', () => {
     } else {
       delete process.env.LOGBOOK_STORAGE
     }
+    if (originalDir !== undefined) {
+      process.env.LOGBOOK_DIR = originalDir
+    } else {
+      delete process.env.LOGBOOK_DIR
+    }
     resetStorage()
   })
 
   it('returns sqlite by default', () => {
-    delete process.env.LOGBOOK_STORAGE
+    process.env.LOGBOOK_STORAGE = 'sqlite'
     expect(getStorageMode()).toBe('sqlite')
   })
 
@@ -25,11 +31,13 @@ describe('getStorageMode', () => {
 
   it('returns obsidian when set', () => {
     process.env.LOGBOOK_STORAGE = 'obsidian'
+    process.env.LOGBOOK_DIR = '/tmp/test-vault'
     expect(getStorageMode()).toBe('obsidian')
   })
 
   it('is case-insensitive', () => {
     process.env.LOGBOOK_STORAGE = 'OBSIDIAN'
+    process.env.LOGBOOK_DIR = '/tmp/test-vault'
     expect(getStorageMode()).toBe('obsidian')
   })
 
