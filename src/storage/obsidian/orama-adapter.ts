@@ -15,7 +15,10 @@ import { parseFrontmatter } from './frontmatter.js'
 import { extractIdFromFilename } from './files.js'
 
 export interface IndexedDoc {
+  /** Unique key inside Orama: the relative path. */
   id: string
+  /** Public-facing entry id (`YYYY-MM-DD-slug` when applicable, else filename). */
+  slug: string
   type: string
   title: string
   body: string
@@ -33,6 +36,7 @@ export interface OramaCtx {
 
 const SCHEMA = {
   id: 'string',
+  slug: 'string',
   type: 'string',
   title: 'string',
   body: 'string',
@@ -70,11 +74,16 @@ function docFromFile(baseDir: string, filePath: string): IndexedDoc | null {
     const raw = readFileSync(filePath, 'utf-8')
     const { frontmatter: fm, body } = parseFrontmatter(raw)
     const fileName = filePath.split(/[\\/]/).pop() ?? ''
-    const id = extractIdFromFilename(fileName) || fileName.replace(/\.md$/, '')
-    const titleLine = body.split('\n').find((l) => l.trim()) ?? id
+    const slug = extractIdFromFilename(fileName) || fileName.replace(/\.md$/, '')
+    const relPath = relative(baseDir, filePath).replace(/\\/g, '/')
+    // Use relative path as Orama id to guarantee uniqueness across the vault
+    // (filenames like `index.md`, `todos.md` repeat per project).
+    const id = relPath
+    const titleLine = body.split('\n').find((l) => l.trim()) ?? slug
     const title = titleLine.replace(/^#+\s*/, '').slice(0, 200)
     return {
       id,
+      slug,
       type: String(fm.type ?? 'note'),
       title,
       body,
@@ -83,7 +92,7 @@ function docFromFile(baseDir: string, filePath: string): IndexedDoc | null {
       project: String(fm.project ?? ''),
       workspace: String(fm.workspace ?? ''),
       date: String(fm.date ?? ''),
-      path: relative(baseDir, filePath).replace(/\\/g, '/'),
+      path: relPath,
     }
   } catch {
     return null
@@ -153,14 +162,25 @@ export async function updateDoc(ctx: OramaCtx, filePath: string): Promise<void> 
 
 export async function removeDoc(ctx: OramaCtx, idOrPath: string): Promise<void> {
   const db = await buildIndex(ctx)
-  const id = idOrPath.includes('/') || idOrPath.includes('\\')
-    ? extractIdFromFilename(idOrPath.split(/[\\/]/).pop() ?? '')
-    : idOrPath
-  if (!id) return
+  // Orama id is the relative path. If we got a slug, search the index for it.
+  let oramaId: string | null = null
+  if (idOrPath.includes('/') || idOrPath.includes('\\')) {
+    oramaId = idOrPath.replace(/\\/g, '/')
+  } else {
+    // Treat as slug — find the doc whose slug matches.
+    const result = await oramaSearch(db, {
+      term: idOrPath,
+      properties: ['slug'],
+      exact: true,
+      limit: 1,
+    })
+    if (result.hits[0]) oramaId = (result.hits[0].document as unknown as IndexedDoc).id
+  }
+  if (!oramaId) return
   try {
-    await remove(db, id)
+    await remove(db, oramaId)
   } catch {}
-  indexedPaths.delete(idOrPath)
+  indexedPaths.delete(oramaId)
 }
 
 export async function persistCache(ctx: OramaCtx): Promise<void> {

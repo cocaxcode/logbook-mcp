@@ -796,7 +796,7 @@ export class ObsidianStorage implements StorageBackend {
         return oramaHits.map((d) => ({
           type: (d.type as EntryType) || 'note',
           data: {
-            id: d.id,
+            id: d.slug,
             type: (d.type as EntryType) || 'note',
             date: d.date || '',
             project: d.project || ws.project,

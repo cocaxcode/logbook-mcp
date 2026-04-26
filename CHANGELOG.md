@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.2 — 2026-04-26
+
+### Fixed
+
+- **Orama: id duplicado en `index.md`/`todos.md`**: vaults con varios proyectos tienen múltiples archivos llamados `index.md` (uno por proyecto). El adapter usaba el slug del filename como id de Orama, lo que provocaba `Error: A document with id "index" already exists` al construir el índice. Resultado: Orama lanzaba en `buildIndex` y todas las búsquedas caían silenciosamente al fallback substring (rank: 0).
+- **Fix**: el id de Orama ahora es la ruta relativa (única), y el slug original se preserva en un campo separado `slug` del IndexedDoc. Las búsquedas devuelven el slug como id público para los consumers.
+- **`removeDoc`**: actualizado para resolver el slug al id de Orama (path) cuando se le pasa un slug.
+
 ## 2.1.1 — 2026-04-26
 
 ### Fixed

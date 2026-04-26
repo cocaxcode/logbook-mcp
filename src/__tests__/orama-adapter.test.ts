@@ -28,7 +28,7 @@ describe('orama-adapter', () => {
     writeMd('proj/notes/2026-04-26-test-note.md', { type: 'note', date: '2026-04-26', project: 'proj' }, '# Hola mundo\n\nEsta es la nota')
     const results = await searchIndex({ baseDir }, 'mundo')
     expect(results.length).toBeGreaterThan(0)
-    expect(results[0].id).toBe('2026-04-26-test-note')
+    expect(results[0].slug).toBe('2026-04-26-test-note')
   })
 
   it('filters by type', async () => {
