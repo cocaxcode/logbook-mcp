@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.0.0-rc.1 — 2026-04-26
+## 2.0.0 — 2026-04-26
 
 **Hard breaking change.** SQLite eliminado del paquete. v2 es Obsidian-only.
 
