@@ -1283,26 +1283,13 @@ export class ObsidianStorage implements StorageBackend {
     const files = globMarkdown(root)
 
     // Build set of valid filename slugs across the search root.
+    // Only `.md` files count as valid wikilink targets — folders don't render as
+    // wikilinks in Obsidian (clicking creates an empty file).
     const validFilenames = new Set<string>()
     for (const f of files) {
       const fname = basename(f, '.md')
       validFilenames.add(fname)
     }
-    // Build set of folder names relative to the vault root — links like
-    // `[[notes]]` inside a dashboard reference sibling folders, which are
-    // valid navigation targets for some Obsidian setups.
-    const folderNames = new Set<string>()
-    const collectFolders = (dir: string, depth: number): void => {
-      if (depth > 5) return
-      try {
-        for (const entry of readdirSync(dir, { withFileTypes: true })) {
-          if (!entry.isDirectory() || entry.name.startsWith('.')) continue
-          folderNames.add(entry.name)
-          collectFolders(join(dir, entry.name), depth + 1)
-        }
-      } catch { /* ignore */ }
-    }
-    collectFolders(this.baseDir, 0)
 
     const wikilinkRe = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g
     let filesModified = 0
@@ -1318,8 +1305,7 @@ export class ObsidianStorage implements StorageBackend {
       const removed: string[] = []
       const newBody = parsed.body.replace(wikilinkRe, (match, target: string) => {
         const targetTrim = target.trim()
-        if (validFilenames.has(targetTrim)) return match // resolves to a file → keep
-        if (folderNames.has(targetTrim)) return match // resolves to a folder → keep
+        if (validFilenames.has(targetTrim)) return match // resolves to a .md → keep
         removed.push(targetTrim)
         return targetTrim // strip brackets, keep inner text
       })

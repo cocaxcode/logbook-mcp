@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.3 — 2026-04-26
+
+### Fixed
+
+- **`cleanup-broken-wikilinks` ya no preserva carpetas**: Obsidian no renderiza `[[name]]` como link a carpetas — busca un `.md` con ese nombre y ofrece crearlo si no existe. La heurística previa de mantener `[[name]]` cuando coincidía con un nombre de carpeta dejaba enlaces rotos como `[[logbook-mcp]]` (la carpeta del proyecto). Ahora sólo se preservan wikilinks que apuntan a un `.md` real. Los `index.md` siguen siendo skipped (dashboards).
+
 ## 2.4.2 — 2026-04-26
 
 ### Fixed
