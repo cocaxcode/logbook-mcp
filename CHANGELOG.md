@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.1.1 — 2026-04-26
+
+### Fixed
+
+- **Orama: tokenizer en español**: el adapter usa `language: 'spanish'` al crear el índice. Sin esto, el tokenizer por defecto (inglés) no manejaba correctamente palabras españolas (`lanzamiento`, `decisión`, etc.) y la búsqueda de Orama caía siempre al fallback substring. Ahora BM25 + fuzzy funciona para contenido en español.
+
 ## 2.1.0 — 2026-04-26
 
 ### Added

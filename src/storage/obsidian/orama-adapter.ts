@@ -97,7 +97,7 @@ export async function buildIndex(ctx: OramaCtx): Promise<AnyOrama> {
     indexInstance = cached
     return cached
   }
-  const db = create({ schema: SCHEMA })
+  const db = create({ schema: SCHEMA, language: 'spanish' })
   const files = walkMd(ctx.baseDir)
   for (const f of files) {
     const doc = docFromFile(ctx.baseDir, f)
@@ -176,7 +176,7 @@ export async function loadCache(ctx: OramaCtx): Promise<AnyOrama | null> {
   if (!existsSync(path)) return null
   try {
     const raw = JSON.parse(readFileSync(path, 'utf-8'))
-    const db = create({ schema: SCHEMA })
+    const db = create({ schema: SCHEMA, language: 'spanish' })
     load(db, raw)
     return db
   } catch {
