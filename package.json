@@ -1,7 +1,7 @@
 {
   "name": "@cocaxcode/logbook-mcp",
-  "version": "0.9.2",
-  "description": "Developer logbook MCP server. Notes, TODOs, reminders, code TODOs with full-text search. SQLite or Obsidian mode. Zero config, auto-detects projects. Works with Claude, Cursor, Windsurf, Copilot, Gemini, Codex.",
+  "version": "2.0.0-rc.1",
+  "description": "Developer logbook MCP server. Notes, TODOs, reminders, code TODOs over an Obsidian vault. 5 consolidated MCP tools + native CLI. Auto-wikilinks, layered config, Orama search. Works with Claude, Cursor, Windsurf, Copilot, Gemini, Codex.",
   "type": "module",
   "bin": {
     "logbook-mcp": "dist/index.js"
@@ -38,8 +38,7 @@
     "checklist",
     "code-todos",
     "full-text-search",
-    "fts5",
-    "sqlite",
+    "obsidian",
     "productivity",
     "project-management",
     "claude",
@@ -68,12 +67,13 @@
     "url": "https://github.com/cocaxcode/logbook-mcp/issues"
   },
   "dependencies": {
+    "@clack/prompts": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.27.0",
-    "better-sqlite3": "^11.0.0",
+    "@orama/orama": "^3.1.18",
+    "chokidar": "^5.0.0",
     "zod": "^3.25.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.0",
     "@types/node": "^22.15.0",
     "prettier": "^3.5.0",
     "tsup": "^8.5.0",

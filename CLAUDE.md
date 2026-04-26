@@ -1,13 +1,15 @@
-# logbook-mcp
+# logbook-mcp (v2)
 
-Cuaderno de bitácora del developer via MCP. Notas, TODOs y code TODOs sin salir de tu AI. Soporta modo SQLite (default) y modo Obsidian (archivos .md con frontmatter).
+Cuaderno de bitácora del developer via MCP. Notas, TODOs y code TODOs sin salir de tu AI. **Obsidian-only** desde v2.0 (SQLite eliminado).
 
 ## Stack
 
 - TypeScript 5 (ESM)
 - MCP SDK (@modelcontextprotocol/sdk)
-- SQLite (better-sqlite3) con FTS5 — modo sqlite
-- Archivos Markdown con frontmatter YAML — modo obsidian
+- Archivos Markdown con frontmatter YAML — backend Obsidian
+- @orama/orama — search full-text BM25+fuzzy (puro JS)
+- @clack/prompts — wizard interactivo `setup init`
+- chokidar — watcher de cambios externos en el vault
 - Vitest para tests
 - tsup para build
 
@@ -15,82 +17,86 @@ Cuaderno de bitácora del developer via MCP. Notas, TODOs y code TODOs sin salir
 
 ```
 src/
-├── index.ts          # Entry: --mcp → server, else CLI
-├── server.ts         # createServer() factory — registra 10 tools
-├── cli.ts            # CLI básico (help, version)
-├── config.ts         # Config file + resolución (args > env > file > defaults)
-├── auto-migrate.ts   # Auto-migración SQLite → Obsidian al arranque
-├── types.ts          # Interfaces compartidas + re-exports de storage
+├── index.ts                 # Entry: --mcp → server, else CLI dispatcher
+├── server.ts                # createServer() — registra 5 tools + 5 shims
+├── cli.ts                   # Shim que llama a cli/dispatcher
+├── config.ts                # Config legacy (~/.logbook/config.json)
+├── types.ts                 # Re-exports de storage/types
+├── config/                  # Sistema de config en capas (v2)
+│   ├── types.ts             # ConfigLayer, ResolvedConfig, ConfigTrace
+│   ├── defaults.ts          # Hardcoded defaults
+│   ├── resolve.ts           # resolveConfig() merge + trace
+│   ├── detect-vaults.ts     # Cascade obsidian.json → common-folder scan
+│   ├── detect-plugins.ts    # community-plugins.json
+│   └── reminders-state.ts   # .logbook/reminders-state.json (atomic R/W)
+├── core/
+│   └── auto-wikilinks.ts    # autoWrapIds + expandRefShortcut middleware
+├── cli/
+│   ├── dispatcher.ts        # --mcp vs CLI mode routing
+│   ├── snippet.ts           # MCP snippets per client (7 clientes)
+│   └── commands/
+│       ├── setup.ts         # init wizard (@clack/prompts) + status + reorganize
+│       ├── note.ts          # logbook-mcp note <content>
+│       ├── todo.ts          # logbook-mcp todo add <content>
+│       └── search.ts        # logbook-mcp search <query>
 ├── storage/
-│   ├── types.ts      # Interfaz StorageBackend + tipos compartidos
-│   ├── index.ts      # Factory getStorage() singleton (usa resolveConfig)
-│   ├── sqlite/
-│   │   └── index.ts  # SqliteStorage implements StorageBackend
+│   ├── types.ts             # StorageBackend + tipos compartidos
+│   ├── index.ts             # Factory getStorage() — sólo Obsidian
 │   └── obsidian/
-│       ├── index.ts      # ObsidianStorage implements StorageBackend
-│       ├── frontmatter.ts # Parser/serializer YAML (zero deps)
-│       ├── slug.ts        # Slugify con soporte acentos
-│       ├── workspace.ts   # Autodetección workspace/project
-│       ├── wikilinks.ts   # [[wikilinks]] automáticos
-│       ├── files.ts       # Helpers de lectura/escritura .md
-│       └── formatting.ts  # Callouts, checkboxes, formatos Obsidian
-├── db/
-│   ├── connection.ts # getDb() singleton → ~/.logbook/logbook.db
-│   ├── schema.ts     # CREATE TABLE + FTS5 + triggers + seed topics
-│   └── queries.ts    # Funciones tipadas de lectura/escritura
+│       ├── index.ts         # ObsidianStorage (monolito de v1, conserva)
+│       ├── orama-adapter.ts # Búsqueda full-text (Orama, lazy + cache)
+│       ├── frontmatter.ts   # Parser/serializer YAML
+│       ├── slug.ts          # Slugify con acentos
+│       ├── workspace.ts     # Autodetección workspace/project
+│       ├── wikilinks.ts     # [[wikilinks]] (rendering existente)
+│       ├── files.ts         # Helpers .md
+│       └── formatting.ts    # Callouts, checkboxes
 ├── git/
-│   ├── detect-repo.ts # Auto-detección de repo via git rev-parse
-│   └── code-todos.ts  # Scan TODO/FIXME/HACK/BUG via git grep
-├── tools/            # 10 MCP tools (1 archivo por tool)
-│   ├── note.ts       # logbook_note — añadir nota
-│   ├── todo.ts       # logbook_todo — CRUD completo (add/list/done/edit/rm)
-│   ├── entry.ts      # logbook_entry — entradas estructuradas (list/edit/delete/standup/decision/debug)
-│   ├── query.ts      # logbook_query — buscar y consultar (search/log/timeline)
-│   ├── topics.ts     # logbook_topics — listar/crear topics
-│   ├── tags.ts       # logbook_tags — listar tags
-│   ├── reminders.ts  # logbook_reminders — recordatorios pendientes
-│   ├── review.ts     # logbook_review — review semanal/mensual
-│   ├── inbox.ts      # logbook_inbox — bandeja de entrada
-│   └── setup.ts      # logbook_setup — admin (init/migrate/status)
+│   ├── detect-repo.ts       # detectRepoPath via git rev-parse
+│   └── code-todos.ts        # Scan TODO/FIXME/HACK/BUG via git grep
+├── tools/                   # 5 main tools + 5 shims deprecated
+│   ├── note.ts              # logbook_note
+│   ├── todo.ts              # logbook_todo (add/list/done/edit/rm)
+│   ├── entry.ts             # logbook_entry (list/edit/delete/standup/decision/debug)
+│   ├── query.ts             # logbook_query (search/log/timeline/tags/reminders/review/get)
+│   ├── setup.ts             # logbook_setup (init/status/inbox/topics)
+│   └── shims/               # Deprecated, eliminados en v2.2
+│       ├── tags.ts
+│       ├── reminders.ts
+│       ├── review.ts
+│       ├── inbox.ts
+│       └── topics.ts
 └── resources/
-    └── reminders.ts  # MCP resource: logbook://reminders
+    └── reminders.ts         # MCP resource: logbook://reminders
 ```
 
 ## Configuration
 
 Prioridad de resolución: CLI args > env vars > config file > defaults.
 
-### Config file: `~/.logbook/config.json`
+### Legacy config: `~/.logbook/config.json` (compat lectura)
 ```json
 {
-  "storage": "sqlite",
-  "dir": null,
-  "workspace": null,
-  "autoMigrate": true
+  "dir": "C:/Users/me/ObsidianVault/logbook",
+  "workspace": null
 }
 ```
+v2 ignora `storage` y `autoMigrate` si los encuentra (warning a stderr).
 
-### CLI args
+### Layered config (v2 — opt-in vía wizard `setup init`)
+- `.logbook.json` en repo (versionable)
+- `<vault>/<root>/.logbook/vault.json` (viaja con vault)
+- `~/.logbook/config.json` (global)
+
+### CLI args / Env
 ```
---storage obsidian --dir "C:/vault/logbook" --workspace "myteam"
+--dir "C:/vault/logbook" --workspace "myteam"
+LOGBOOK_DIR=...   LOGBOOK_WORKSPACE=...
 ```
 
-### Env vars
-```
-LOGBOOK_STORAGE=obsidian
-LOGBOOK_DIR=/ruta/al/vault/logbook
-LOGBOOK_WORKSPACE=myteam
-```
+## Backend
 
-### Auto-migración
-Al arrancar con storage=obsidian, si existe `~/.logbook/logbook.db` con datos y no hay marker `.migrated`, migra automáticamente notes + todos a Obsidian.
-
-## Storage Modes
-
-### SQLite (default)
-Almacena en `~/.logbook/logbook.db`. FTS5 para búsqueda.
-
-### Obsidian
+### Obsidian (único)
 Escribe archivos `.md` con frontmatter YAML. Estructura:
 ```
 vault/logbook/
@@ -107,20 +113,22 @@ vault/logbook/
 
 ## Key Patterns
 
-- **StorageBackend**: interfaz que abstraen SQLite y Obsidian. `getStorage()` singleton.
-- **Config**: `resolveConfig()` centraliza args > env > file > defaults
-- **Factory**: `createServer()` registra tools con `registerXyzTool(server)`
-- **Tool handler**: try-catch, return `{ content: [...] }` o `{ isError: true, content: [...] }`
-- **Consolidated tools**: tools con `action` param y switch interno. Runtime validation per action.
-- **Auto-migrate**: en startup, antes de createServer()
+- **StorageBackend**: única implementación es `ObsidianStorage`. `getStorage()` singleton.
+- **Config legacy**: `resolveConfig()` lee `~/.logbook/config.json` (modo compat).
+- **Config layered (v2)**: `src/config/resolve.ts` → `resolveConfig(layers)` con `ConfigTrace`.
+- **CLI dispatcher**: `--mcp` → server; cualquier otra cosa → comando CLI.
+- **Wizard**: `setup init` con `@clack/prompts`, snippet MCP por cliente.
+- **Auto-wikilinks**: middleware `applyAutoWikilinks` antes de escribir notas/todos/entries.
+- **Tool handler**: try-catch, return `{ content: [...] }` o `{ isError: true, content: [...] }`.
+- **Consolidated tools**: 5 main + 5 shims deprecated (eliminados en v2.2).
 
 ## Commands
 
 ```bash
-npm test        # Vitest (151 tests)
-npm run build   # tsup → dist/
-npm run typecheck # tsc --noEmit
-npm run inspector # MCP Inspector para probar tools
+npm test         # Vitest (133 tests)
+npm run build    # tsup → dist/
+npm run typecheck  # tsc --noEmit
+npm run inspector # MCP Inspector
 ```
 
 ## Conventions
@@ -130,20 +138,25 @@ npm run inspector # MCP Inspector para probar tools
 - Single quotes, no semicolons, trailing commas (.prettierrc)
 - `console.error()` para logging (stdout reservado para MCP)
 
-## 10 MCP Tools
+## 5 MCP Tools (v2)
 
 | Tool | Función | Actions |
 |------|---------|---------|
 | `logbook_note` | Añadir nota con topic | — |
 | `logbook_todo` | CRUD completo de TODOs | add, list, done, edit, rm |
 | `logbook_entry` | Entradas estructuradas | list, edit, delete, standup, decision, debug |
-| `logbook_query` | Buscar y consultar | search, log, timeline |
-| `logbook_topics` | Listar/crear topics | list, add |
-| `logbook_tags` | Listar/filtrar tags | — |
-| `logbook_reminders` | Recordatorios pendientes | — |
-| `logbook_review` | Review semanal/mensual | — |
-| `logbook_inbox` | Bandeja de entrada | list, process |
-| `logbook_setup` | Administración | init, migrate, status |
+| `logbook_query` | Buscar y consultar | search, log, timeline, **tags**, **reminders**, **review**, **get** |
+| `logbook_setup` | Administración | init, status, **inbox**, **topics** |
+
+## 5 Shims Deprecated (eliminados en v2.2)
+
+| Shim | Reemplazo |
+|------|-----------|
+| `logbook_tags` | `logbook_query` action: `tags` |
+| `logbook_reminders` | `logbook_query` action: `reminders` |
+| `logbook_review` | `logbook_query` action: `review` |
+| `logbook_inbox` | `logbook_setup` action: `inbox` (sub-action via `inbox_action`) |
+| `logbook_topics` | `logbook_setup` action: `topics` (sub-action via `topic_action`) |
 
 ## 1 MCP Resource
 

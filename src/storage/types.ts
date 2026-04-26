@@ -8,11 +8,8 @@ import type {
   SearchType,
 } from '../types.js'
 
-// ── Storage modes ──
-
-export type StorageMode = 'sqlite' | 'obsidian'
 export type EntryType = 'note' | 'todo' | 'decision' | 'debug' | 'standup' | 'review'
-export type EntryId = string // SQLite: "42", Obsidian: "2026-03-21-slug"
+export type EntryId = string // Obsidian: "2026-03-21-slug"
 
 // ── Core entities ──
 
@@ -230,7 +227,8 @@ export interface StorageBackend {
   updateTodoStatus(ids: EntryId[], status: 'pending' | 'done'): TodoEntry[]
   updateTodo(id: EntryId, fields: TodoUpdateFields): TodoEntry | null
   deleteTodos(ids: EntryId[]): EntryId[]
-  ackRecurringReminder(id: EntryId): void
+  ackRecurringReminder(id: EntryId, snoozeUntil?: string): void
+  getEntryById(id: EntryId): (EntryMeta & { content: string }) | null
 
   // Specialized entries
   insertStandup(yesterday: string, today: string, blockers: string, topic?: string): StandupEntry
