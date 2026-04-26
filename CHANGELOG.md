@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.1.0 — 2026-04-26
+
+### Added
+
+- **Orama wired into `search()`**: `logbook_query action:search` ahora usa BM25 + fuzzy + filtros por facetas en lugar del scan substring. El método de `StorageBackend.search()` pasa a `async`.
+  - Fallback automático a substring si Orama falla o devuelve 0 resultados.
+  - Cache persistente en `<vault>/.logbook/index-cache.json` (lazy build al primer search).
+  - Watcher chokidar del adapter listo para incorporar (no auto-arrancado todavía).
+- **Auto-update del índice Orama** tras escrituras: `insertNote`, `insertStandup`, `insertDecision`, `insertDebug`, `deleteEntry` actualizan/quitan el doc del índice fire-and-forget para mantenerlo coherente entre sesiones.
+
+### Internal
+
+- `searchIndex` del adapter devuelve `IndexedDoc & { score, snippet }` (incluye `body`, `tags`, `workspace`, `path`) en lugar de un subset trimmed — necesario para hidratar `SearchResult` correctamente.
+- Helpers `private` de `ObsidianStorage` convertidos a públicos (con intent `@internal`) en preparación al split de módulos por dominio (deferido a `v2.2-split-monolith`, ver `openspec/changes/v2.2-split-monolith/proposal.md`).
+
+### Notes
+
+- **Split del monolito Obsidian deferido**: `src/storage/obsidian/index.ts` sigue siendo un único archivo de ~2200 líneas con la clase `ObsidianStorage` completa. La descomposición en 12 módulos por dominio se hará en v2.2 como refactor puro sin cambios de API. Ver el proposal en `openspec/changes/v2.2-split-monolith/`.
+
 ## 2.0.1 — 2026-04-26
 
 ### Fixed

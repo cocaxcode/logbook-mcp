@@ -1,6 +1,6 @@
 {
   "name": "@cocaxcode/logbook-mcp",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Developer logbook MCP server. Notes, TODOs, reminders, code TODOs over an Obsidian vault. 5 consolidated MCP tools + native CLI. Auto-wikilinks, layered config, Orama search. Works with Claude, Cursor, Windsurf, Copilot, Gemini, Codex.",
   "type": "module",
   "bin": {

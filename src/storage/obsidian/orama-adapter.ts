@@ -116,7 +116,7 @@ export async function searchIndex(
   ctx: OramaCtx,
   query: string,
   filters: { type?: string; topic?: string; project?: string; workspace?: string; limit?: number } = {},
-): Promise<Array<{ id: string; type: string; title: string; snippet: string; score: number; topic: string; project: string; date: string }>> {
+): Promise<Array<IndexedDoc & { score: number; snippet: string }>> {
   const db = await buildIndex(ctx)
   const where: Record<string, string> = {}
   if (filters.type && filters.type !== 'all') where.type = filters.type
@@ -134,16 +134,7 @@ export async function searchIndex(
   return result.hits.map((h) => {
     const d = h.document as unknown as IndexedDoc
     const snippet = d.body.length > 200 ? `${d.body.slice(0, 197)}...` : d.body
-    return {
-      id: d.id,
-      type: d.type,
-      title: d.title,
-      snippet,
-      score: h.score,
-      topic: d.topic,
-      project: d.project,
-      date: d.date,
-    }
+    return { ...d, score: h.score, snippet }
   })
 }
 

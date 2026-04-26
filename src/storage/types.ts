@@ -236,7 +236,7 @@ export interface StorageBackend {
   insertDebug(title: string, error: string, cause: string, fix: string, file?: string, topic?: string): DebugEntry
 
   // Search & queries
-  search(query: string, filters: SearchFilters): SearchResult[]
+  search(query: string, filters: SearchFilters): Promise<SearchResult[]>
   getLog(filters: LogFilters): LogEntry[]
   getDueReminders(scope?: 'project' | 'workspace' | 'global'): ReminderResult | null
   getTags(filter?: string): TagResult[]

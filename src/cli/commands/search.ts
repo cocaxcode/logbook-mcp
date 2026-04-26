@@ -1,6 +1,6 @@
 import { getStorage } from '../../storage/index.js'
 
-export function runSearch(args: string[]): number {
+export async function runSearch(args: string[]): Promise<number> {
   const scopeIdx = args.indexOf('--scope')
   const scope = scopeIdx !== -1 ? args[scopeIdx + 1] : 'project'
   const positional = args.filter((_, i) => {
@@ -16,7 +16,7 @@ export function runSearch(args: string[]): number {
   try {
     const storage = getStorage()
     if (scope === 'project') storage.autoRegisterRepo()
-    const results = storage.search(query, { scope: scope as 'project' | 'global', limit: 20 })
+    const results = await storage.search(query, { scope: scope as 'project' | 'global', limit: 20 })
     console.log(JSON.stringify({ query, results, total: results.length }, null, 2))
     return 0
   } catch (err) {

@@ -216,17 +216,17 @@ describe('ObsidianStorage', () => {
   // ── Search ──
 
   describe('search', () => {
-    it('finds notes by content', () => {
+    it('finds notes by content', async () => {
       storage.insertNote('CORS issue with Safari')
       storage.insertNote('JWT token refresh')
-      const results = storage.search('CORS', {})
-      expect(results.length).toBe(1)
-      expect(results[0].data.content).toContain('CORS')
+      const results = await storage.search('CORS', {})
+      expect(results.length).toBeGreaterThanOrEqual(1)
+      expect(results.some((r) => r.data.content?.includes('CORS'))).toBe(true)
     })
 
-    it('returns empty for no matches', () => {
+    it('returns empty for no matches', async () => {
       storage.insertNote('Hello world')
-      const results = storage.search('nonexistent', {})
+      const results = await storage.search('nonexistent', {})
       expect(results.length).toBe(0)
     })
   })

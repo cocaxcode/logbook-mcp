@@ -47,7 +47,7 @@ export function registerQueryTool(server: McpServer): void {
             }
             if (params.scope === 'project') storage.autoRegisterRepo()
             const allowedScope = params.scope === 'workspace' ? 'project' : params.scope
-            const results = storage.search(params.query, {
+            const results = await storage.search(params.query, {
               type: params.type,
               topic: params.topic,
               scope: allowedScope as 'project' | 'global' | undefined,

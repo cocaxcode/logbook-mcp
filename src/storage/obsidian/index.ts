@@ -42,6 +42,21 @@ import { applyAutoWikilinks } from '../../core/auto-wikilinks.js'
 import { ensureDir, globMarkdown, readEntry, writeEntry, copyAttachment, extractIdFromFilename } from './files.js'
 import { formatStandup, formatDecision, formatDebug } from './formatting.js'
 import { readState as readReminderState, writeStateAtomic as writeReminderStateAtomic } from '../../config/reminders-state.js'
+import { searchIndex as oramaSearch, updateDoc as oramaUpdateDoc, removeDoc as oramaRemoveDoc } from './orama-adapter.js'
+
+/** Fire-and-forget update of the Orama index for a single file. */
+function syncOramaFile(baseDir: string, filePath: string): void {
+  oramaUpdateDoc({ baseDir }, filePath).catch((e) => {
+    console.error(`[logbook] Orama updateDoc failed: ${(e as Error).message}`)
+  })
+}
+
+/** Fire-and-forget removal from the Orama index. */
+function dropOramaFile(baseDir: string, idOrPath: string): void {
+  oramaRemoveDoc({ baseDir }, idOrPath).catch((e) => {
+    console.error(`[logbook] Orama removeDoc failed: ${(e as Error).message}`)
+  })
+}
 
 // ── Folder names per entry type (solo para tipos que siguen siendo archivos individuales) ──
 
@@ -194,9 +209,9 @@ function getISOWeekNumber(date: Date): number {
 // ── ObsidianStorage ──
 
 export class ObsidianStorage implements StorageBackend {
-  private baseDir: string
-  private repoPath: string | null = null
-  private wsInfo: WorkspaceInfo | null = null
+  baseDir: string
+  repoPath: string | null = null
+  wsInfo: WorkspaceInfo | null = null
 
   constructor(baseDir: string) {
     this.baseDir = baseDir.replace(/\\/g, '/')
@@ -265,7 +280,9 @@ export class ObsidianStorage implements StorageBackend {
     if (topic) fm.topic = topic
     if (topic) fm.tags = [topic]
 
-    writeEntry(join(dir, filename), fm, body)
+    const filePath = join(dir, filename)
+    writeEntry(filePath, fm, body)
+    syncOramaFile(this.baseDir, filePath)
 
     const entry: NoteEntry = {
       id, type: 'note', date, project: ws.project, workspace: ws.workspace,
@@ -290,7 +307,7 @@ export class ObsidianStorage implements StorageBackend {
    *   proyecto/deploys/deploy-log.md
    *   proyecto/deploys/releases.md
    */
-  private insertTableRow(ws: WorkspaceInfo, content: string, topic: string, date: string): NoteEntry {
+  insertTableRow(ws: WorkspaceInfo, content: string, topic: string, date: string): NoteEntry {
     const topicFolder = this.getTopicFolder(topic)
     const dir = this.typeDir(ws, 'note', topicFolder)
 
@@ -665,7 +682,9 @@ export class ObsidianStorage implements StorageBackend {
     const vaultIds = getVaultIdSet(projectDir)
     let body = applyAutoWikilinks(formatStandup(yesterday, today, blockers), vaultIds)
     body = applyWikilinks(body, knownProjects, knownEntries)
-    writeEntry(join(dir, filename), fm, body)
+    const standupPath = join(dir, filename)
+    writeEntry(standupPath, fm, body)
+    syncOramaFile(this.baseDir, standupPath)
 
     const entry: StandupEntry = {
       id, type: 'standup', date, project: ws.project, workspace: ws.workspace,
@@ -698,7 +717,9 @@ export class ObsidianStorage implements StorageBackend {
     const vaultIdsDec = getVaultIdSet(projectDir)
     let body = applyAutoWikilinks(formatDecision(title, context, options, decision, consequences), vaultIdsDec)
     body = applyWikilinks(body, knownProjects, knownEntries)
-    writeEntry(join(dir, filename), fm, body)
+    const decisionPath = join(dir, filename)
+    writeEntry(decisionPath, fm, body)
+    syncOramaFile(this.baseDir, decisionPath)
 
     const entry: DecisionEntry = {
       id, type: 'decision', date, project: ws.project, workspace: ws.workspace,
@@ -740,7 +761,9 @@ export class ObsidianStorage implements StorageBackend {
     const vaultIdsDbg = getVaultIdSet(projectDir)
     let body = applyAutoWikilinks(formatDebug(title, error, cause, fix, attachmentName), vaultIdsDbg)
     body = applyWikilinks(body, knownProjects, knownEntries)
-    writeEntry(join(dir, filename), fm, body)
+    const debugPath = join(dir, filename)
+    writeEntry(debugPath, fm, body)
+    syncOramaFile(this.baseDir, debugPath)
 
     const entry: DebugEntry = {
       id, type: 'debug', date, project: ws.project, workspace: ws.workspace,
@@ -753,9 +776,44 @@ export class ObsidianStorage implements StorageBackend {
 
   // ── Search & queries ──
 
-  search(query: string, filters: SearchFilters): SearchResult[] {
+  async search(query: string, filters: SearchFilters): Promise<SearchResult[]> {
     const ws = this.getWorkspace()
     const searchDir = filters.scope === 'global' ? this.baseDir : this.projectDir(ws)
+
+    // Primary path: Orama BM25 + fuzzy + facets.
+    try {
+      const limit = filters.limit ?? 20
+      const oramaHits = await oramaSearch(
+        { baseDir: searchDir },
+        query,
+        {
+          type: filters.type === 'all' ? undefined : filters.type === 'notes' ? 'note' : filters.type === 'todos' ? 'todo' : filters.type,
+          topic: filters.topic,
+          limit,
+        },
+      )
+      if (oramaHits.length > 0) {
+        return oramaHits.map((d) => ({
+          type: (d.type as EntryType) || 'note',
+          data: {
+            id: d.id,
+            type: (d.type as EntryType) || 'note',
+            date: d.date || '',
+            project: d.project || ws.project,
+            workspace: d.workspace || ws.workspace,
+            topic: d.topic || null,
+            tags: d.tags || [],
+            content: d.body,
+          } as NoteEntry,
+          rank: d.score,
+        }))
+      }
+      // Empty Orama result → fall through to substring (one-word queries match better there sometimes).
+    } catch (e) {
+      console.error(`[logbook] Orama search failed, falling back to substring: ${(e as Error).message}`)
+    }
+
+    // Fallback: substring scan (legacy, also exposed when Orama returns nothing).
     const queryLower = query.toLowerCase()
     const results: SearchResult[] = []
 
@@ -893,7 +951,7 @@ export class ObsidianStorage implements StorageBackend {
   }
 
   /** Recolecta reminders de un directorio de proyecto (reminders/ + todos.md) */
-  private collectRemindersFromProject(
+  collectRemindersFromProject(
     projectDir: string,
     workspace: string,
     project: string,
@@ -1681,6 +1739,7 @@ tags: [standup]
       if (fileId !== id) continue
 
       unlinkSync(file)
+      dropOramaFile(this.baseDir, id)
       return true
     }
 
@@ -1824,12 +1883,12 @@ tags: [standup]
 
   // ── Private helpers ──
 
-  private ensureDashboard(): void {
+  ensureDashboard(): void {
     this.generateDashboard(false)
   }
 
   /** Busca en qué workspace está un proyecto dado */
-  private findWorkspaceForProject(project: string): string {
+  findWorkspaceForProject(project: string): string {
     let found = 'default'
     this.walkProjectDirs((_dir, ws, proj) => {
       if (proj === project) found = ws
@@ -1841,11 +1900,11 @@ tags: [standup]
     return found
   }
 
-  private projectDir(ws: WorkspaceInfo): string {
+  projectDir(ws: WorkspaceInfo): string {
     return join(this.baseDir, ws.workspace, ws.project)
   }
 
-  private typeDir(ws: WorkspaceInfo, type: EntryType, topicFolder?: string | null): string {
+  typeDir(ws: WorkspaceInfo, type: EntryType, topicFolder?: string | null): string {
     // Custom folder from topic takes precedence
     if (topicFolder) {
       const dir = join(this.projectDir(ws), topicFolder)
@@ -1864,11 +1923,11 @@ tags: [standup]
   }
 
   /** Persisted custom topics config */
-  private getCustomTopicsPath(): string {
+  getCustomTopicsPath(): string {
     return join(this.baseDir, 'topics.json')
   }
 
-  private loadCustomTopics(): Array<{ name: string; description: string | null; kind: TopicInfo['kind']; folder: string | null; showInIndex: boolean }> {
+  loadCustomTopics(): Array<{ name: string; description: string | null; kind: TopicInfo['kind']; folder: string | null; showInIndex: boolean }> {
     const path = this.getCustomTopicsPath()
     if (!existsSync(path)) return []
     try {
@@ -1878,14 +1937,14 @@ tags: [standup]
     }
   }
 
-  private saveCustomTopics(topics: Array<{ name: string; description: string | null; kind: TopicInfo['kind']; folder: string | null; showInIndex: boolean }>): void {
+  saveCustomTopics(topics: Array<{ name: string; description: string | null; kind: TopicInfo['kind']; folder: string | null; showInIndex: boolean }>): void {
     const path = this.getCustomTopicsPath()
     ensureDir(dirname(path))
     writeFileSync(path, JSON.stringify(topics, null, 2), 'utf-8')
   }
 
   /** Get the custom folder for a topic (if configured), null otherwise */
-  private getTopicFolder(topicName: string): string | null {
+  getTopicFolder(topicName: string): string | null {
     const custom = this.loadCustomTopics()
     const match = custom.find((t) => t.name === topicName)
     return match?.folder ?? null
@@ -1899,19 +1958,19 @@ tags: [standup]
   }
 
   /** Ruta al archivo todos.md del proyecto */
-  private todosFilePath(ws: WorkspaceInfo): string {
+  todosFilePath(ws: WorkspaceInfo): string {
     const dir = this.projectDir(ws)
     ensureDir(dir)
     return join(dir, 'todos.md')
   }
 
   /** Lee todos.md y devuelve frontmatter + array de lineas de TODOs */
-  private readTodosFile(ws: WorkspaceInfo): { lines: string[]; fm: Frontmatter } {
+  readTodosFile(ws: WorkspaceInfo): { lines: string[]; fm: Frontmatter } {
     const todosPath = this.todosFilePath(ws)
     return this.readTodosFileAt(todosPath, ws)
   }
 
-  private readTodosFileAt(todosPath: string, ws?: WorkspaceInfo): { lines: string[]; fm: Frontmatter } {
+  readTodosFileAt(todosPath: string, ws?: WorkspaceInfo): { lines: string[]; fm: Frontmatter } {
     if (!existsSync(todosPath)) {
       return {
         lines: [],
@@ -1937,7 +1996,7 @@ tags: [standup]
   }
 
   /** Escribe todos.md con frontmatter y lineas de TODOs */
-  private writeTodosFile(path: string, fm: Frontmatter, lines: string[]): void {
+  writeTodosFile(path: string, fm: Frontmatter, lines: string[]): void {
     ensureDir(dirname(path))
     const content = serializeFrontmatter(fm) + '\n' + lines.join('\n') + '\n'
     this.withFileLock(path, () => {
@@ -1949,7 +2008,7 @@ tags: [standup]
    * Simple file lock using a .lock file to prevent concurrent writes.
    * Uses retry with exponential backoff for contention.
    */
-  private withFileLock<T>(filePath: string, fn: () => T): T {
+  withFileLock<T>(filePath: string, fn: () => T): T {
     const lockPath = filePath + '.lock'
     const maxRetries = 5
     const baseDelay = 50
@@ -1988,13 +2047,13 @@ tags: [standup]
   }
 
   /** Extrae contenido de un TODO legacy (formato viejo con checkbox en body) */
-  private extractLegacyTodoContent(body: string): string {
+  extractLegacyTodoContent(body: string): string {
     const match = body.match(/^- \[[ x]\] (.+?)(?:\s*[\u23EB\uD83D\uDD3C\uD83D\uDD3D\uD83D\uDCC5\u2705].*)?$/m)
     return match ? match[1].trim() : body.trim()
   }
 
   /** Busca en todos.md por query */
-  private searchInTodosFile(ws: WorkspaceInfo, queryLower: string, topicFilter?: string): SearchResult[] {
+  searchInTodosFile(ws: WorkspaceInfo, queryLower: string, topicFilter?: string): SearchResult[] {
     const { lines, fm } = this.readTodosFile(ws)
     const results: SearchResult[] = []
 
@@ -2024,7 +2083,7 @@ tags: [standup]
   }
 
   /** Busca en reminders/ por query */
-  private searchInReminders(ws: WorkspaceInfo, queryLower: string, topicFilter?: string): SearchResult[] {
+  searchInReminders(ws: WorkspaceInfo, queryLower: string, topicFilter?: string): SearchResult[] {
     const remindersDir = join(this.projectDir(ws), 'reminders')
     if (!existsSync(remindersDir)) return []
 
@@ -2058,7 +2117,7 @@ tags: [standup]
   }
 
   /** Obtiene TODOs completados para el log */
-  private getTodoLogEntries(ws: WorkspaceInfo, from?: string, to?: string, topic?: string): LogEntry[] {
+  getTodoLogEntries(ws: WorkspaceInfo, from?: string, to?: string, topic?: string): LogEntry[] {
     const { lines, fm } = this.readTodosFile(ws)
     const entries: LogEntry[] = []
 
@@ -2091,7 +2150,7 @@ tags: [standup]
   }
 
   /** Cuenta tags de TODOs en todos.md del vault */
-  private countTodoTags(tagCounts: Map<string, number>): void {
+  countTodoTags(tagCounts: Map<string, number>): void {
     this.walkProjectDirs((projectDir) => {
       const todosPath = join(projectDir, 'todos.md')
       if (!existsSync(todosPath)) return
@@ -2107,7 +2166,7 @@ tags: [standup]
   }
 
   /** Recorre todos los directorios de proyecto del vault */
-  private walkProjectDirs(callback: (projectDir: string, workspace: string, project: string) => void): void {
+  walkProjectDirs(callback: (projectDir: string, workspace: string, project: string) => void): void {
     if (!existsSync(this.baseDir)) return
 
     const workspaces = readdirSync(this.baseDir, { withFileTypes: true })
@@ -2124,7 +2183,7 @@ tags: [standup]
     }
   }
 
-  private filterAndMap<T>(
+  filterAndMap<T>(
     files: string[],
     filters: { from?: string; to?: string; limit?: number; topicId?: string },
     mapper: (fm: Frontmatter, body: string, id: string) => T,
@@ -2153,7 +2212,7 @@ tags: [standup]
     return results.slice(0, limit)
   }
 
-  private groupByProject(items: TodoEntry[]): ReminderGroup[] {
+  groupByProject(items: TodoEntry[]): ReminderGroup[] {
     const map = new Map<string, TodoEntry[]>()
     for (const item of items) {
       const key = item.project || 'global'
@@ -2168,7 +2227,7 @@ tags: [standup]
       }))
   }
 
-  private resolveDates(filters: { period?: string; from?: string; to?: string }): { from?: string; to?: string } {
+  resolveDates(filters: { period?: string; from?: string; to?: string }): { from?: string; to?: string } {
     if (filters.from || filters.to) {
       return { from: filters.from, to: filters.to }
     }
