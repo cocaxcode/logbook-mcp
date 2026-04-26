@@ -1,5 +1,24 @@
 # Changelog
 
+## 2.4.0 — 2026-04-26
+
+### Added
+
+- **Cross-reference automático TODO done → nota linkeada**:
+  - Cuando un TODO contiene `[[YYYY-MM-DD-slug]]` y se marca como `done`, el sistema añade automáticamente una sección `## ✅ Resueltos` al final de la nota referenciada con la línea:
+    ```
+    - ✅ 2026-04-26: TODO #59 — contenido del TODO
+    ```
+  - Idempotente: si la línea ya existe, se actualiza (no duplica).
+  - Reversible: al hacer `done undo`, la línea se elimina; si la sección queda vacía, también se quita.
+  - Fire-and-forget update del índice Orama tras la modificación.
+  - Soporta múltiples `[[id]]` en un mismo TODO (afecta a todas las notas linkeadas).
+  - Sólo escribe en archivos cuyo id existe (`getEntryById` resuelve a un `.md` real); si el id no resuelve, se ignora silenciosamente.
+
+### Tests
+
+- 156 tests verde (era 144). Nuevos en `resolved-ref.test.ts` (10) y `obsidian-storage.test.ts` (2 integración: append on done, remove on undo).
+
 ## 2.3.0 — 2026-04-26
 
 ### Added

@@ -3,6 +3,7 @@ import { mkdirSync, rmSync, existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { ObsidianStorage } from '../storage/obsidian/index.js'
+import { resetIndex } from '../storage/obsidian/orama-adapter.js'
 
 // Mock detectRepoPath to return a controlled path
 vi.mock('../git/detect-repo.js', () => ({
@@ -19,7 +20,8 @@ describe('ObsidianStorage', () => {
   let storage: ObsidianStorage
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `logbook-obsidian-test-${Date.now()}`)
+    resetIndex()
+    testDir = join(tmpdir(), `logbook-obsidian-test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`)
     mkdirSync(testDir, { recursive: true })
     storage = new ObsidianStorage(testDir)
     storage.autoRegisterRepo()
@@ -236,6 +238,34 @@ describe('ObsidianStorage', () => {
       const results = await storage.search('qwertytkn', {})
       const ids = results.map((r) => r.data.id)
       expect(new Set(ids).size).toBe(ids.length) // no duplicates
+    })
+  })
+
+  describe('cross-reference TODO done → linked note', () => {
+    it('appends ✅ Resueltos section to linked note when TODO is marked done', () => {
+      const note = storage.insertNote('Plan inicial v3')
+      const todo = storage.insertTodo(`Trabajar en ${note.id}`)
+      // The note id should be wrapped automatically by autoWikilinks: storage stores the wrapped content
+      storage.updateTodoStatus([todo.id], 'done')
+
+      // Read the linked note file and verify section exists
+      const ws = storage.getWorkspace()
+      const noteFile = join(testDir, ws.workspace, ws.project, 'notes', `${note.id}.md`)
+      const content = readFileSync(noteFile, 'utf-8')
+      expect(content).toContain('## ✅ Resueltos')
+      expect(content).toContain(`TODO #${todo.id}`)
+    })
+
+    it('removes the line when the TODO is undone', () => {
+      const note = storage.insertNote('Plan inicial v4')
+      const todo = storage.insertTodo(`Trabajar en ${note.id}`)
+      storage.updateTodoStatus([todo.id], 'done')
+      storage.updateTodoStatus([todo.id], 'pending')
+
+      const ws = storage.getWorkspace()
+      const noteFile = join(testDir, ws.workspace, ws.project, 'notes', `${note.id}.md`)
+      const content = readFileSync(noteFile, 'utf-8')
+      expect(content).not.toContain(`TODO #${todo.id}`)
     })
   })
 

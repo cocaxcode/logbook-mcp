@@ -44,6 +44,61 @@ import { formatStandup, formatDecision, formatDebug } from './formatting.js'
 import { readState as readReminderState, writeStateAtomic as writeReminderStateAtomic } from '../../config/reminders-state.js'
 import { searchIndex as oramaSearch, updateDoc as oramaUpdateDoc, removeDoc as oramaRemoveDoc } from './orama-adapter.js'
 
+// ── Cross-reference helpers (TODO done → linked note) ──
+
+const RESOLVED_SECTION_HEADER = '## ✅ Resueltos'
+const LINKED_ID_RE = /\[\[(\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*)\]\]/g
+
+/** Extract entry ids referenced by [[id]] in text. */
+export function extractLinkedIds(text: string): string[] {
+  const ids = new Set<string>()
+  for (const m of text.matchAll(LINKED_ID_RE)) ids.add(m[1])
+  return [...ids]
+}
+
+/** Remove [[wikilink]] brackets so the line in the resolved section stays readable. */
+export function stripWikilinkBrackets(text: string): string {
+  return text.replace(/\[\[([^\]]+)\]\]/g, '$1')
+}
+
+const todoLineRe = (todoId: string) =>
+  new RegExp(`^- ✅ \\d{4}-\\d{2}-\\d{2}: TODO #${todoId} —.*$`, 'm')
+
+/**
+ * Insert or update the resolved TODO entry inside a `## ✅ Resueltos` section.
+ * Idempotent: if a line for the same todoId exists, it is replaced.
+ */
+export function upsertResolvedRef(body: string, todoId: string, content: string, date: string): string {
+  const line = `- ✅ ${date}: TODO #${todoId} — ${content}`
+  const sectionMatch = body.match(/\n## ✅ Resueltos\n+([\s\S]*?)(?=\n## |\n# |$)/)
+
+  if (sectionMatch) {
+    const sectionContent = sectionMatch[1]
+    const re = todoLineRe(todoId)
+    if (re.test(sectionContent)) {
+      return body.replace(re, line)
+    }
+    // Append at end of section (preserve any trailing content after section)
+    const trimmed = sectionContent.replace(/\n+$/, '')
+    const newSection = `\n## ✅ Resueltos\n\n${trimmed ? trimmed + '\n' : ''}${line}\n`
+    return body.slice(0, sectionMatch.index!) + newSection + body.slice(sectionMatch.index! + sectionMatch[0].length)
+  }
+  // Section does not exist — create it at the end
+  const sep = body.endsWith('\n') ? '\n' : '\n\n'
+  return body.replace(/\s+$/, '') + `${sep}\n${RESOLVED_SECTION_HEADER}\n\n${line}\n`
+}
+
+/** Remove the line for `todoId` from the section. If section becomes empty, drop it. */
+export function removeResolvedRef(body: string, todoId: string): string {
+  const re = todoLineRe(todoId)
+  if (!re.test(body)) return body
+  let next = body.replace(new RegExp(`\\n?${todoLineRe(todoId).source}`, 'm'), '')
+  // Clean up empty section
+  next = next.replace(/\n## ✅ Resueltos\n\s*(?=\n## |\n# |$)/, '\n')
+  next = next.replace(/\n## ✅ Resueltos\n\s*$/, '')
+  return next
+}
+
 /** Fire-and-forget update of the Orama index for a single file. */
 function syncOramaFile(baseDir: string, filePath: string, language?: OramaLanguage): void {
   oramaUpdateDoc({ baseDir, language }, filePath).catch((e) => {
@@ -564,9 +619,52 @@ export class ObsidianStorage implements StorageBackend {
     if (results.length > 0) {
       fm.updated = today
       this.writeTodosFile(todosPath, fm, lines)
+
+      // Cross-reference linked notes: when done, mark the resolved TODO under
+      // a `## ✅ Resueltos` section of any [[id]] mentioned in the TODO content.
+      // When undone (going back to pending), remove the entry from that section.
+      for (const r of results) {
+        const linkedIds = extractLinkedIds(r.content)
+        for (const linkedId of linkedIds) {
+          this.syncResolvedRef(linkedId, r.id, stripWikilinkBrackets(r.content), status === 'done', today)
+        }
+      }
     }
 
     return results
+  }
+
+  /** Locate the .md file for a given entry id under the current project. */
+  private findFileForId(id: EntryId): string | null {
+    const ws = this.getWorkspace()
+    const projectDir = this.projectDir(ws)
+    const candidates = ['notes', 'decisions', 'debug', 'standups', 'reminders']
+    for (const sub of candidates) {
+      const dir = join(projectDir, sub)
+      if (!existsSync(dir)) continue
+      try {
+        const files = globMarkdown(dir)
+        for (const f of files) {
+          if (extractIdFromFilename(basename(f)) === id) return f
+        }
+      } catch { /* ignore */ }
+    }
+    return null
+  }
+
+  /** Insert/update or remove the resolved TODO line in a linked note's `## ✅ Resueltos` section. */
+  private syncResolvedRef(linkedId: string, todoId: string, content: string, done: boolean, date: string): void {
+    const filePath = this.findFileForId(linkedId)
+    if (!filePath) return // linked id doesn't resolve to a file; skip silently
+
+    const parsed = readEntry(filePath)
+    const body = parsed.body
+    const newBody = done
+      ? upsertResolvedRef(body, todoId, content, date)
+      : removeResolvedRef(body, todoId)
+    if (newBody === body) return
+    writeEntry(filePath, parsed.frontmatter, newBody)
+    syncOramaFile(this.baseDir, filePath, this.language)
   }
 
   updateTodo(id: EntryId, fields: TodoUpdateFields): TodoEntry | null {
