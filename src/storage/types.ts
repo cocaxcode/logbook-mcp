@@ -247,6 +247,19 @@ export interface StorageBackend {
   insertTopic(name: string, description?: string, kind?: TopicKind, folder?: string, showInIndex?: boolean): TopicInfo
   removeTopic(name: string, opts?: { dryRun?: boolean }): { removed: boolean; folderKept?: string; entriesAffected: number; dryRun?: boolean }
 
+  /**
+   * Scan the vault and remove `[[name]]` wikilinks that do not resolve to an existing `.md` file.
+   * Preserves valid wikilinks (date-prefixed ids that exist) and Obsidian-supported alias syntax `[[name|display]]`.
+   * Returns counts and the list of files modified. Pass `dryRun: true` to preview.
+   */
+  cleanupBrokenWikilinks(opts?: { dryRun?: boolean; scope?: 'project' | 'global' }): {
+    filesScanned: number
+    filesModified: number
+    linksRemoved: number
+    sample: Array<{ file: string; removed: string[] }>
+    dryRun?: boolean
+  }
+
   // Code TODOs (only meaningful in SQLite, obsidian returns [])
   getCodeTodos(repoPath: string): CodeTodo[]
   syncCodeTodos(repoPath: string, todos: CodeTodo[]): { added: number; resolved: number }

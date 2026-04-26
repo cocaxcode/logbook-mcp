@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, rmSync, readdirSync, unlinkSync, statSync, openSync, closeSync } from 'node:fs'
-import { basename, dirname, join } from 'node:path'
+import { basename, dirname, join, relative } from 'node:path'
 import type { CodeTodo, Priority } from '../../types.js'
 import { detectRepoPath } from '../../git/detect-repo.js'
 import { scanCodeTodos } from '../../git/code-todos.js'
@@ -37,7 +37,7 @@ import type { Frontmatter } from './frontmatter.js'
 import { parseFrontmatter, serializeFrontmatter } from './frontmatter.js'
 import { generateSlug, resolveFilename } from './slug.js'
 import { detectWorkspace } from './workspace.js'
-import { applyWikilinks, getKnownProjects, getKnownEntryTitles, getVaultIdSet } from './wikilinks.js'
+import { getVaultIdSet } from './wikilinks.js'
 import { applyAutoWikilinks } from '../../core/auto-wikilinks.js'
 import { ensureDir, globMarkdown, readEntry, writeEntry, copyAttachment, extractIdFromFilename } from './files.js'
 import { formatStandup, formatDecision, formatDebug } from './formatting.js'
@@ -329,11 +329,8 @@ export class ObsidianStorage implements StorageBackend {
     const id = extractIdFromFilename(filename)
 
     const projectDir = this.projectDir(ws)
-    const knownProjects = getKnownProjects(this.baseDir)
-    const knownEntries = getKnownEntryTitles(this.baseDir, projectDir)
     const vaultIds = getVaultIdSet(projectDir)
-    let body = applyAutoWikilinks(content, vaultIds)
-    body = applyWikilinks(body, knownProjects, knownEntries)
+    const body = applyAutoWikilinks(content, vaultIds)
 
     const fm: Frontmatter = {
       type: 'note',
@@ -784,11 +781,8 @@ export class ObsidianStorage implements StorageBackend {
     if (topic) { fm.topic = topic; fm.tags = [topic] }
 
     const projectDir = this.projectDir(ws)
-    const knownProjects = getKnownProjects(this.baseDir)
-    const knownEntries = getKnownEntryTitles(this.baseDir, projectDir)
     const vaultIds = getVaultIdSet(projectDir)
-    let body = applyAutoWikilinks(formatStandup(yesterday, today, blockers), vaultIds)
-    body = applyWikilinks(body, knownProjects, knownEntries)
+    const body = applyAutoWikilinks(formatStandup(yesterday, today, blockers), vaultIds)
     const standupPath = join(dir, filename)
     writeEntry(standupPath, fm, body)
     syncOramaFile(this.baseDir, standupPath, this.language)
@@ -819,11 +813,8 @@ export class ObsidianStorage implements StorageBackend {
     if (topic) { fm.topic = topic || 'decision'; fm.tags = [topic || 'decision'] }
 
     const projectDir = this.projectDir(ws)
-    const knownProjects = getKnownProjects(this.baseDir)
-    const knownEntries = getKnownEntryTitles(this.baseDir, projectDir)
     const vaultIdsDec = getVaultIdSet(projectDir)
-    let body = applyAutoWikilinks(formatDecision(title, context, options, decision, consequences), vaultIdsDec)
-    body = applyWikilinks(body, knownProjects, knownEntries)
+    const body = applyAutoWikilinks(formatDecision(title, context, options, decision, consequences), vaultIdsDec)
     const decisionPath = join(dir, filename)
     writeEntry(decisionPath, fm, body)
     syncOramaFile(this.baseDir, decisionPath, this.language)
@@ -863,11 +854,8 @@ export class ObsidianStorage implements StorageBackend {
     if (topic) { fm.topic = topic || 'fix'; fm.tags = [topic || 'fix'] }
 
     const projectDir = this.projectDir(ws)
-    const knownProjects = getKnownProjects(this.baseDir)
-    const knownEntries = getKnownEntryTitles(this.baseDir, projectDir)
     const vaultIdsDbg = getVaultIdSet(projectDir)
-    let body = applyAutoWikilinks(formatDebug(title, error, cause, fix, attachmentName), vaultIdsDbg)
-    body = applyWikilinks(body, knownProjects, knownEntries)
+    const body = applyAutoWikilinks(formatDebug(title, error, cause, fix, attachmentName), vaultIdsDbg)
     const debugPath = join(dir, filename)
     writeEntry(debugPath, fm, body)
     syncOramaFile(this.baseDir, debugPath, this.language)
@@ -1279,6 +1267,64 @@ export class ObsidianStorage implements StorageBackend {
    * - Does NOT delete entries that referenced the topic; only de-registers it.
    * - If the topic had a folder with content, returns folderKept with the path so the caller can decide.
    */
+  /**
+   * Scan vault and strip `[[name]]` wikilinks that do not resolve to an existing `.md`.
+   * Keeps date-prefixed valid ids and aliased `[[target|label]]` (uses target for resolution).
+   */
+  cleanupBrokenWikilinks(opts: { dryRun?: boolean; scope?: 'project' | 'global' } = {}): {
+    filesScanned: number
+    filesModified: number
+    linksRemoved: number
+    sample: Array<{ file: string; removed: string[] }>
+    dryRun?: boolean
+  } {
+    const ws = this.getWorkspace()
+    const root = opts.scope === 'global' ? this.baseDir : this.projectDir(ws)
+    const files = globMarkdown(root)
+
+    // Build set of valid filename slugs across the search root.
+    const validFilenames = new Set<string>()
+    for (const f of files) {
+      const fname = basename(f, '.md')
+      validFilenames.add(fname)
+    }
+
+    const wikilinkRe = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g
+    let filesModified = 0
+    let linksRemoved = 0
+    const sample: Array<{ file: string; removed: string[] }> = []
+
+    for (const f of files) {
+      const parsed = readEntry(f)
+      const removed: string[] = []
+      const newBody = parsed.body.replace(wikilinkRe, (match, target: string) => {
+        const targetTrim = target.trim()
+        if (validFilenames.has(targetTrim)) return match // resolves → keep
+        removed.push(targetTrim)
+        return targetTrim // strip brackets, keep text
+      })
+      if (newBody !== parsed.body) {
+        filesModified++
+        linksRemoved += removed.length
+        if (sample.length < 10) {
+          sample.push({ file: relative(this.baseDir, f).replace(/\\/g, '/'), removed })
+        }
+        if (!opts.dryRun) {
+          writeEntry(f, parsed.frontmatter, newBody)
+          syncOramaFile(this.baseDir, f, this.language)
+        }
+      }
+    }
+
+    return {
+      filesScanned: files.length,
+      filesModified,
+      linksRemoved,
+      sample,
+      ...(opts.dryRun ? { dryRun: true } : {}),
+    }
+  }
+
   removeTopic(name: string, opts: { dryRun?: boolean } = {}): { removed: boolean; folderKept?: string; entriesAffected: number; dryRun?: boolean } {
     const PREDEFINED = new Set(['feature', 'fix', 'chore', 'idea', 'decision', 'blocker', 'reminder'])
     if (PREDEFINED.has(name)) {

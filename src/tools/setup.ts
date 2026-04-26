@@ -12,9 +12,12 @@ export function registerSetupTool(server: McpServer): void {
 - init: Inicializa vault Obsidian (dashboard, templates, inbox).
 - status: Muestra config y vault activo.
 - inbox: Bandeja de entrada (sub-accion via inbox_action: list|process).
-- topics: Topics (sub-accion via topic_action: list|add).`,
+- topics: Topics (sub-accion via topic_action: list|add|remove).
+- cleanup-broken-wikilinks: Quita [[name]] que no resuelven a un .md existente. Acepta scope y dry_run.`,
     {
-      action: z.enum(['init', 'status', 'inbox', 'topics']).describe('Accion principal'),
+      action: z.enum(['init', 'status', 'inbox', 'topics', 'cleanup-broken-wikilinks']).describe('Accion principal'),
+      scope: z.enum(['project', 'global']).optional().default('project').describe('Scope (cleanup-broken-wikilinks)'),
+      dry_run: z.boolean().optional().default(false).describe('Solo previsualizar sin modificar (cleanup-broken-wikilinks)'),
       force: z.boolean().optional().default(false).describe('Regenerar (init)'),
       // inbox sub-action
       inbox_action: z.enum(['list', 'process']).optional().describe('Sub-accion de inbox'),
@@ -109,6 +112,12 @@ export function registerSetupTool(server: McpServer): void {
             }
             const topics = storage.getTopics()
             return { content: [{ type: 'text' as const, text: JSON.stringify(topics) }] }
+          }
+
+          case 'cleanup-broken-wikilinks': {
+            storage.autoRegisterRepo()
+            const result = storage.cleanupBrokenWikilinks({ dryRun: params.dry_run, scope: params.scope })
+            return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
           }
 
           default:

@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.4.1 — 2026-04-26
+
+### Fixed
+
+- **Eliminado el auto-wrap de nombres de proyecto en `[[name]]`**: la lógica v1 (`applyWikilinks`) envolvía mentions de carpetas de proyecto (ej. `logbook-mcp`) en `[[logbook-mcp]]`, generando enlaces rotos en Obsidian (busca `logbook-mcp.md` que no existe — sólo existe la carpeta). Ahora `insertNote/insertStandup/insertDecision/insertDebug` sólo aplican `applyAutoWikilinks` (que envuelve IDs `YYYY-MM-DD-slug` que **sí** resuelven a notas reales).
+
+### Added
+
+- **`logbook_setup action:cleanup-broken-wikilinks`**: nueva acción que escanea el vault y elimina los `[[name]]` que no resuelven a un `.md` existente, dejando el texto plano. Acepta `scope: project|global` (default project) y `dry_run: true` (preview sin modificar). Devuelve `filesScanned`, `filesModified`, `linksRemoved` y `sample[]` con archivos afectados.
+
+### Tests
+
+- 159 tests verde (era 156). Nuevos: cleanup elimina links rotos, dryRun no modifica archivos, insertNote ya no añade `[[project]]`.
+
 ## 2.4.0 — 2026-04-26
 
 ### Added

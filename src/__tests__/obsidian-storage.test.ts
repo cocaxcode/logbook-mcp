@@ -241,6 +241,54 @@ describe('ObsidianStorage', () => {
     })
   })
 
+  describe('cleanupBrokenWikilinks', () => {
+    it('strips wikilinks that do not resolve to a .md file', () => {
+      // Create a note that contains both a valid wikilink and a broken one.
+      const validNote = storage.insertNote('Valid target')
+      // Manually craft a body with one broken link by inserting a note that mentions a non-existent file.
+      const noteWithBroken = storage.insertNote(
+        `Mention valid ${validNote.id} y also [[no-existe-file]]`,
+      )
+
+      // Insert the broken bracket manually since auto-wikilinks won't add it (id doesn't resolve).
+      const ws = storage.getWorkspace()
+      const file = join(testDir, ws.workspace, ws.project, 'notes', `${noteWithBroken.id}.md`)
+      const raw = readFileSync(file, 'utf-8')
+      // body already has [[no-existe-file]] literal because user wrote it.
+      expect(raw).toContain('[[no-existe-file]]')
+
+      const result = storage.cleanupBrokenWikilinks({ scope: 'project' })
+      expect(result.linksRemoved).toBeGreaterThanOrEqual(1)
+
+      const after = readFileSync(file, 'utf-8')
+      expect(after).not.toContain('[[no-existe-file]]')
+      expect(after).toContain('no-existe-file')
+    })
+
+    it('dryRun does not modify files', () => {
+      const note = storage.insertNote('texto con [[broken-link]] dentro')
+      const ws = storage.getWorkspace()
+      const file = join(testDir, ws.workspace, ws.project, 'notes', `${note.id}.md`)
+      const before = readFileSync(file, 'utf-8')
+
+      const result = storage.cleanupBrokenWikilinks({ scope: 'project', dryRun: true })
+      expect(result.dryRun).toBe(true)
+      expect(result.linksRemoved).toBeGreaterThanOrEqual(1)
+
+      const after = readFileSync(file, 'utf-8')
+      expect(after).toBe(before) // unchanged
+    })
+  })
+
+  describe('insertNote does NOT auto-wrap project names', () => {
+    it('only wraps date-prefixed ids that exist (no [[project]] residue)', () => {
+      // Project name "test-project" comes from the mocked detectRepoPath.
+      const note = storage.insertNote('Trabajando en test-project hoy')
+      // Should not be wrapped since "test-project" is a folder name, not a file.
+      expect(note.content).not.toContain('[[test-project]]')
+    })
+  })
+
   describe('cross-reference TODO done → linked note', () => {
     it('appends ✅ Resueltos section to linked note when TODO is marked done', () => {
       const note = storage.insertNote('Plan inicial v3')
