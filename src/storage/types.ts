@@ -245,6 +245,7 @@ export interface StorageBackend {
   // Topics
   getTopics(): TopicInfo[]
   insertTopic(name: string, description?: string, kind?: TopicKind, folder?: string, showInIndex?: boolean): TopicInfo
+  removeTopic(name: string, opts?: { dryRun?: boolean }): { removed: boolean; folderKept?: string; entriesAffected: number; dryRun?: boolean }
 
   // Code TODOs (only meaningful in SQLite, obsidian returns [])
   getCodeTodos(repoPath: string): CodeTodo[]

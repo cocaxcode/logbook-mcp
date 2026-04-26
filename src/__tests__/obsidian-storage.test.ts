@@ -229,6 +229,60 @@ describe('ObsidianStorage', () => {
       const results = await storage.search('nonexistent', {})
       expect(results.length).toBe(0)
     })
+
+    it('hybrid: orama + substring deduplicated by id', async () => {
+      // The same doc may match both Orama and substring; should appear once.
+      storage.insertNote('texto raro qwertytkn que aparece una vez')
+      const results = await storage.search('qwertytkn', {})
+      const ids = results.map((r) => r.data.id)
+      expect(new Set(ids).size).toBe(ids.length) // no duplicates
+    })
+  })
+
+  describe('removeTopic', () => {
+    it('refuses to remove a predefined topic', () => {
+      expect(() => storage.removeTopic('feature')).toThrow(/Cannot remove predefined topic/)
+    })
+
+    it('removes a custom topic from registry', () => {
+      storage.insertTopic('temp-topic', 'just for test', 'note')
+      const before = storage.getTopics().some((t) => t.name === 'temp-topic')
+      expect(before).toBe(true)
+
+      const result = storage.removeTopic('temp-topic')
+      expect(result.removed).toBe(true)
+
+      const after = storage.getTopics().some((t) => t.name === 'temp-topic')
+      expect(after).toBe(false)
+    })
+
+    it('returns removed:false when topic does not exist', () => {
+      const result = storage.removeTopic('nonexistent-topic-xyz')
+      expect(result.removed).toBe(false)
+      expect(result.entriesAffected).toBe(0)
+    })
+
+    it('counts entries that referenced the removed topic', () => {
+      storage.insertTopic('throwaway', 'temp', 'note')
+      storage.insertNote('test note', 'throwaway')
+      storage.insertNote('another', 'throwaway')
+      const result = storage.removeTopic('throwaway')
+      expect(result.removed).toBe(true)
+      expect(result.entriesAffected).toBe(2)
+    })
+
+    it('dryRun: previews without removing', () => {
+      storage.insertTopic('preview-topic', 'temp', 'note')
+      storage.insertNote('note A', 'preview-topic')
+
+      const preview = storage.removeTopic('preview-topic', { dryRun: true })
+      expect(preview.dryRun).toBe(true)
+      expect(preview.removed).toBe(false)
+      expect(preview.entriesAffected).toBe(1)
+
+      // Should still be in registry after dryRun
+      expect(storage.getTopics().some((t) => t.name === 'preview-topic')).toBe(true)
+    })
   })
 
   // ── Tags ──

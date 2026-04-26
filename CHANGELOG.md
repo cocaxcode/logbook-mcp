@@ -1,5 +1,26 @@
 # Changelog
 
+## 2.3.0 — 2026-04-26
+
+### Added
+
+- **`topics remove`**: nueva sub-acción de `logbook_setup` (y shim `logbook_topics`) para eliminar topics custom del registro.
+  - Refusa eliminar topics predefinidos (`feature`, `fix`, `chore`, `idea`, `decision`, `blocker`, `reminder`).
+  - **Borrado explícito**: requiere `confirm: true`. Sin él, devuelve un preview con `entriesAffected` (cuántas entradas referencian el topic) y `folderKept` (si la carpeta tiene contenido) sin modificar nada.
+  - No borra entradas existentes — sólo de-registra el topic.
+  - Actualiza dashboard si el topic estaba marcado `showInIndex`.
+
+### Changed
+
+- **Búsqueda híbrida Orama + substring**: `search()` ahora ejecuta Orama y substring en paralelo y mergea resultados, deduplicando por id. Garantiza cobertura máxima:
+  - Orama va primero (BM25 + fuzzy + multi-word AND con score real).
+  - Substring complementa con cualquier coincidencia que el tokenizer no haya manejado bien (caracteres raros, frontmatter-only, etc.).
+  - Sin regresiones: cualquier query que funcionaba antes sigue funcionando.
+
+### Tests
+
+- 144 tests verde (era 137). Nuevos: removeTopic predefined refusal, custom remove, idempotency, dryRun preview, hybrid search dedup.
+
 ## 2.2.0 — 2026-04-26
 
 ### Added

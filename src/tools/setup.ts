@@ -23,12 +23,13 @@ export function registerSetupTool(server: McpServer): void {
       topic: z.string().optional().describe('Topic a asignar (inbox process, topics add)'),
       type: z.enum(['note', 'decision', 'debug', 'standup']).optional().describe('Tipo (inbox process)'),
       // topics sub-action
-      topic_action: z.enum(['list', 'add']).optional().describe('Sub-accion de topics'),
+      topic_action: z.enum(['list', 'add', 'remove']).optional().describe('Sub-accion de topics'),
       name: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).optional().describe('Nombre del topic (add)'),
       description: z.string().max(200).optional().describe('Descripcion (add)'),
       kind: z.enum(['note', 'todo', 'table']).optional().default('note').describe('Tipo (add)'),
       folder: z.string().max(50).regex(/^[a-z0-9-]+$/).optional().describe('Carpeta (add)'),
       show_in_index: z.boolean().optional().default(true).describe('Mostrar en index (add)'),
+      confirm: z.boolean().optional().default(false).describe('Confirmacion explicita requerida para topics remove (default false → preview)'),
     },
     async (params) => {
       try {
@@ -82,6 +83,29 @@ export function registerSetupTool(server: McpServer): void {
               }
               const topic = storage.insertTopic(params.name, params.description, params.kind, params.folder, params.show_in_index)
               return { content: [{ type: 'text' as const, text: JSON.stringify(topic) }] }
+            }
+            if (params.topic_action === 'remove') {
+              if (!params.name) return { isError: true, content: [{ type: 'text' as const, text: '"name" requerido para topics remove' }] }
+              storage.autoRegisterRepo()
+              try {
+                if (!params.confirm) {
+                  // Preview: count what would be affected, do not delete.
+                  const preview = storage.removeTopic(params.name, { dryRun: true })
+                  return {
+                    content: [{
+                      type: 'text' as const,
+                      text: JSON.stringify({
+                        ...preview,
+                        message: `Preview: topic "${params.name}" tiene ${preview.entriesAffected} entradas que lo referencian. ${preview.folderKept ? `La carpeta "${preview.folderKept}" tiene contenido y NO se borrará.` : ''} Para confirmar, llama de nuevo con confirm:true.`,
+                      }),
+                    }],
+                  }
+                }
+                const result = storage.removeTopic(params.name)
+                return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+              } catch (e) {
+                return { isError: true, content: [{ type: 'text' as const, text: (e as Error).message }] }
+              }
             }
             const topics = storage.getTopics()
             return { content: [{ type: 'text' as const, text: JSON.stringify(topics) }] }

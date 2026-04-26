@@ -788,20 +788,22 @@ export class ObsidianStorage implements StorageBackend {
   async search(query: string, filters: SearchFilters): Promise<SearchResult[]> {
     const ws = this.getWorkspace()
     const searchDir = filters.scope === 'global' ? this.baseDir : this.projectDir(ws)
+    const limit = filters.limit ?? 20
 
-    // Primary path: Orama BM25 + fuzzy + facets.
-    try {
-      const limit = filters.limit ?? 20
-      const oramaHits = await oramaSearch(
-        { baseDir: searchDir, language: this.language },
-        query,
-        {
-          type: filters.type === 'all' ? undefined : filters.type === 'notes' ? 'note' : filters.type === 'todos' ? 'todo' : filters.type,
-          topic: filters.topic,
-          limit,
-        },
-      )
-      if (oramaHits.length > 0) {
+    // Run Orama (BM25 + fuzzy + facets) AND substring scan in parallel, then merge.
+    // Orama-ranked hits come first; substring catches anything Orama misses
+    // (rare tokens, frontmatter-only matches, tokenizer edge cases). Dedupe by id.
+    const oramaPromise = (async (): Promise<SearchResult[]> => {
+      try {
+        const oramaHits = await oramaSearch(
+          { baseDir: searchDir, language: this.language },
+          query,
+          {
+            type: filters.type === 'all' ? undefined : filters.type === 'notes' ? 'note' : filters.type === 'todos' ? 'todo' : filters.type,
+            topic: filters.topic,
+            limit,
+          },
+        )
         return oramaHits.map((d) => ({
           type: (d.type as EntryType) || 'note',
           data: {
@@ -816,32 +818,45 @@ export class ObsidianStorage implements StorageBackend {
           } as NoteEntry,
           rank: d.score,
         }))
+      } catch (e) {
+        console.error(`[logbook] Orama search failed, returning substring only: ${(e as Error).message}`)
+        return []
       }
-      // Empty Orama result → fall through to substring (one-word queries match better there sometimes).
-    } catch (e) {
-      console.error(`[logbook] Orama search failed, falling back to substring: ${(e as Error).message}`)
-    }
+    })()
 
-    // Fallback: substring scan (legacy, also exposed when Orama returns nothing).
+    const substringResults = this.searchSubstring(ws, searchDir, query, filters)
+    const oramaResults = await oramaPromise
+
+    // Merge: Orama first (already sorted by BM25), then substring uniques.
+    const seen = new Set<string>()
+    const merged: SearchResult[] = []
+    for (const r of oramaResults) {
+      if (seen.has(r.data.id)) continue
+      seen.add(r.data.id)
+      merged.push(r)
+    }
+    for (const r of substringResults) {
+      if (seen.has(r.data.id)) continue
+      seen.add(r.data.id)
+      merged.push(r)
+    }
+    return merged.slice(0, limit)
+  }
+
+  private searchSubstring(ws: WorkspaceInfo, searchDir: string, query: string, filters: SearchFilters): SearchResult[] {
     const queryLower = query.toLowerCase()
     const results: SearchResult[] = []
 
-    // Buscar en archivos .md individuales (notes, decisions, debug, standups)
     const files = globMarkdown(searchDir)
     for (const file of files) {
-      // Saltar todos.md — se busca aparte
       if (basename(file) === 'todos.md') continue
-
       const { frontmatter: fm, body } = readEntry(file)
 
-      // Filter by type
       if (filters.type && filters.type !== 'all') {
         const fmType = fm.type as string
         if (filters.type === 'notes' && fmType !== 'note') continue
-        if (filters.type === 'todos') continue // TODOs se buscan abajo
+        if (filters.type === 'todos') continue
       }
-
-      // Filter by topic
       if (filters.topic && fm.topic !== filters.topic) continue
 
       const searchable = `${body} ${Object.values(fm).join(' ')}`.toLowerCase()
@@ -863,19 +878,14 @@ export class ObsidianStorage implements StorageBackend {
       })
     }
 
-    // Buscar en todos.md si aplica
     if (!filters.type || filters.type === 'all' || filters.type === 'todos') {
-      const todosResults = this.searchInTodosFile(ws, queryLower, filters.topic)
-      results.push(...todosResults)
+      results.push(...this.searchInTodosFile(ws, queryLower, filters.topic))
     }
-
-    // Buscar en reminders/ si aplica
     if (!filters.type || filters.type === 'all') {
-      const reminderResults = this.searchInReminders(ws, queryLower, filters.topic)
-      results.push(...reminderResults)
+      results.push(...this.searchInReminders(ws, queryLower, filters.topic))
     }
 
-    return results.slice(0, filters.limit || 20)
+    return results
   }
 
   getLog(filters: LogFilters): LogEntry[] {
@@ -1163,6 +1173,67 @@ export class ObsidianStorage implements StorageBackend {
         folder: info.folder,
         showInIndex: info.showInIndex,
       }))
+  }
+
+  /**
+   * Remove a custom topic from the registry.
+   * - Refuses to remove predefined topics (feature/fix/chore/idea/decision/blocker/reminder).
+   * - Does NOT delete entries that referenced the topic; only de-registers it.
+   * - If the topic had a folder with content, returns folderKept with the path so the caller can decide.
+   */
+  removeTopic(name: string, opts: { dryRun?: boolean } = {}): { removed: boolean; folderKept?: string; entriesAffected: number; dryRun?: boolean } {
+    const PREDEFINED = new Set(['feature', 'fix', 'chore', 'idea', 'decision', 'blocker', 'reminder'])
+    if (PREDEFINED.has(name)) {
+      throw new Error(`Cannot remove predefined topic "${name}". Predefined topics: ${[...PREDEFINED].join(', ')}.`)
+    }
+    const custom = this.loadCustomTopics()
+    const idx = custom.findIndex((t) => t.name === name)
+    if (idx < 0) return { removed: false, entriesAffected: 0, ...(opts.dryRun ? { dryRun: true } : {}) }
+
+    const entry = custom[idx]
+
+    // Count entries (notes/todos) that reference this topic without deleting them.
+    let entriesAffected = 0
+    const ws = this.getWorkspace()
+    const projectDir = this.projectDir(ws)
+    for (const sub of ['notes', 'todos', 'decisions', 'debug', 'standups']) {
+      const dir = join(projectDir, sub)
+      if (!existsSync(dir)) continue
+      try {
+        const files = globMarkdown(dir)
+        for (const f of files) {
+          const { frontmatter: fm } = readEntry(f)
+          if (fm.topic === name) entriesAffected++
+        }
+      } catch { /* ignore */ }
+    }
+
+    // Folder still exists with files? Inform caller.
+    let folderKept: string | undefined
+    if (entry.folder) {
+      const folderPath = join(projectDir, entry.folder)
+      if (existsSync(folderPath)) {
+        try {
+          const items = readdirSync(folderPath).filter((f) => !f.startsWith('.'))
+          if (items.length > 0) folderKept = folderPath
+        } catch { /* ignore */ }
+      }
+    }
+
+    if (opts.dryRun) {
+      return { removed: false, folderKept, entriesAffected, dryRun: true }
+    }
+
+    // Actually remove the registry entry
+    custom.splice(idx, 1)
+    this.saveCustomTopics(custom)
+
+    // Refresh dashboard if this topic was visible
+    if (entry.showInIndex) {
+      try { this.generateDashboard(true) } catch { /* best-effort */ }
+    }
+
+    return { removed: true, folderKept, entriesAffected }
   }
 
   insertTopic(name: string, _description?: string, kind?: TopicInfo['kind'], folder?: string, showInIndex?: boolean): TopicInfo {
