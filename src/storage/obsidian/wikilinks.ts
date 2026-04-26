@@ -93,27 +93,32 @@ export function getKnownEntryTitles(_baseDir: string, projectDir: string): strin
 
 /**
  * Wrap known project names in [[wikilinks]] for Obsidian.
- * Skips names already wrapped in [[]].
- * Only wraps whole-word matches.
+ *
+ * Splits the content into segments outside vs. inside existing `[[...]]` and
+ * only applies replacements on outside segments. This prevents nested wikilinks
+ * such as `[[2026-04-26-prueba-v2-[[logbook-mcp]]-...]]` when an auto-wrapped
+ * id contains a known project name.
+ *
+ * Only wraps whole-word matches (length >= 3).
  * Optionally also wraps known entry titles.
  */
 export function applyWikilinks(content: string, knownProjects: string[], knownEntries?: string[]): string {
   const allNames = [...knownProjects, ...(knownEntries || [])]
   if (allNames.length === 0) return content
 
-  let result = content
+  // Split: even-indexed parts are outside wikilinks, odd-indexed are wikilinks themselves.
+  const parts = content.split(/(\[\[[^\]]*\]\])/g)
 
-  for (const name of allNames) {
-    // Skip if name is too short (avoid false positives)
-    if (name.length < 3) continue
-
-    // Regex: match name as whole word, NOT already inside [[]]
-    // Negative lookbehind for [[ and negative lookahead for ]]
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    const regex = new RegExp(`(?<!\\[\\[)\\b(${escaped})\\b(?!\\]\\])`, 'gi')
-
-    result = result.replace(regex, '[[$1]]')
+  for (let i = 0; i < parts.length; i += 2) {
+    let segment = parts[i]
+    for (const name of allNames) {
+      if (name.length < 3) continue
+      const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const regex = new RegExp(`\\b(${escaped})\\b`, 'gi')
+      segment = segment.replace(regex, '[[$1]]')
+    }
+    parts[i] = segment
   }
 
-  return result
+  return parts.join('')
 }

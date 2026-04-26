@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.1 — 2026-04-26
+
+### Fixed
+
+- **Nested wikilinks** in `applyWikilinks`: when a note content mentioned an entry id whose slug contained a known project name (e.g. `2026-04-26-prueba-v2-logbook-mcp-lanzamiento`), the v1 project-wrapping pass produced output like `[[2026-04-26-prueba-v2-[[logbook-mcp]]-lanzamiento]]`. The function now segments content into outside/inside `[[...]]` and only applies project replacements on outside segments.
+- Regression tests added (`wikilinks.test.ts`).
+
 ## 2.0.0 — 2026-04-26
 
 **Hard breaking change.** SQLite eliminado del paquete. v2 es Obsidian-only.
