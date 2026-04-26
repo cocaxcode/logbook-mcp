@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.4.2 — 2026-04-26
+
+### Fixed
+
+- **`cleanup-broken-wikilinks`** ahora **respeta los dashboards y folder navigation**:
+  - Los archivos `index.md` (dashboards) se saltan por completo.
+  - Si `[[name]]` apunta a una **carpeta existente** del vault (ej. `[[notes]]`, `[[debug]]`), se conserva — sirve como link de navegación dentro de Obsidian.
+  - Sólo se eliminan `[[name]]` que no resuelven ni a archivo ni a carpeta.
+
 ## 2.4.1 — 2026-04-26
 
 ### Fixed

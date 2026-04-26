@@ -1288,6 +1288,21 @@ export class ObsidianStorage implements StorageBackend {
       const fname = basename(f, '.md')
       validFilenames.add(fname)
     }
+    // Build set of folder names relative to the vault root — links like
+    // `[[notes]]` inside a dashboard reference sibling folders, which are
+    // valid navigation targets for some Obsidian setups.
+    const folderNames = new Set<string>()
+    const collectFolders = (dir: string, depth: number): void => {
+      if (depth > 5) return
+      try {
+        for (const entry of readdirSync(dir, { withFileTypes: true })) {
+          if (!entry.isDirectory() || entry.name.startsWith('.')) continue
+          folderNames.add(entry.name)
+          collectFolders(join(dir, entry.name), depth + 1)
+        }
+      } catch { /* ignore */ }
+    }
+    collectFolders(this.baseDir, 0)
 
     const wikilinkRe = /\[\[([^\]|]+)(?:\|[^\]]*)?\]\]/g
     let filesModified = 0
@@ -1295,13 +1310,18 @@ export class ObsidianStorage implements StorageBackend {
     const sample: Array<{ file: string; removed: string[] }> = []
 
     for (const f of files) {
+      // Skip dashboard files: they intentionally link to folder names that may
+      // not have a matching .md (e.g., [[notes]] navigation in index.md).
+      if (basename(f) === 'index.md') continue
+
       const parsed = readEntry(f)
       const removed: string[] = []
       const newBody = parsed.body.replace(wikilinkRe, (match, target: string) => {
         const targetTrim = target.trim()
-        if (validFilenames.has(targetTrim)) return match // resolves → keep
+        if (validFilenames.has(targetTrim)) return match // resolves to a file → keep
+        if (folderNames.has(targetTrim)) return match // resolves to a folder → keep
         removed.push(targetTrim)
-        return targetTrim // strip brackets, keep text
+        return targetTrim // strip brackets, keep inner text
       })
       if (newBody !== parsed.body) {
         filesModified++
