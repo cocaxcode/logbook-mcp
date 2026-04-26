@@ -6,11 +6,6 @@ declare const __PKG_VERSION__: string
  * CLI args take precedence over env vars and config file.
  */
 function applyCliArgs(argv: string[]): void {
-  const storageIdx = argv.indexOf('--storage')
-  if (storageIdx !== -1 && argv[storageIdx + 1]) {
-    process.env.LOGBOOK_STORAGE = argv[storageIdx + 1]
-  }
-
   const dirIdx = argv.indexOf('--dir')
   if (dirIdx !== -1 && argv[dirIdx + 1]) {
     process.env.LOGBOOK_DIR = argv[dirIdx + 1]
@@ -34,12 +29,6 @@ async function main() {
     ensureConfigFile()
     const config = resolveConfig()
 
-    // Auto-migrate if switching to obsidian with existing SQLite data
-    if (config.storage === 'obsidian' && config.autoMigrate) {
-      const { checkAndMigrate } = await import('./auto-migrate.js')
-      await checkAndMigrate(config)
-    }
-
     const { StdioServerTransport } = await import(
       '@modelcontextprotocol/sdk/server/stdio.js'
     )
@@ -48,7 +37,7 @@ async function main() {
     const server = createServer()
     const transport = new StdioServerTransport()
     await server.connect(transport)
-    console.error(`logbook-mcp server running on stdio (storage: ${config.storage}${config.storage === 'obsidian' ? `, dir: ${config.dir}` : ''})`)
+    console.error(`logbook-mcp server running on stdio (dir: ${config.dir})`)
 
     const shutdown = async () => {
       console.error('logbook-mcp: shutting down...')

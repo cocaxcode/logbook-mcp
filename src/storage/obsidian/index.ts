@@ -37,9 +37,11 @@ import type { Frontmatter } from './frontmatter.js'
 import { parseFrontmatter, serializeFrontmatter } from './frontmatter.js'
 import { generateSlug, resolveFilename } from './slug.js'
 import { detectWorkspace } from './workspace.js'
-import { applyWikilinks, getKnownProjects, getKnownEntryTitles } from './wikilinks.js'
+import { applyWikilinks, getKnownProjects, getKnownEntryTitles, getVaultIdSet } from './wikilinks.js'
+import { applyAutoWikilinks } from '../../core/auto-wikilinks.js'
 import { ensureDir, globMarkdown, readEntry, writeEntry, copyAttachment, extractIdFromFilename } from './files.js'
 import { formatStandup, formatDecision, formatDebug } from './formatting.js'
+import { readState as readReminderState, writeStateAtomic as writeReminderStateAtomic } from '../../config/reminders-state.js'
 
 // ── Folder names per entry type (solo para tipos que siguen siendo archivos individuales) ──
 
@@ -250,7 +252,9 @@ export class ObsidianStorage implements StorageBackend {
     const projectDir = this.projectDir(ws)
     const knownProjects = getKnownProjects(this.baseDir)
     const knownEntries = getKnownEntryTitles(this.baseDir, projectDir)
-    const body = applyWikilinks(content, knownProjects, knownEntries)
+    const vaultIds = getVaultIdSet(projectDir)
+    let body = applyAutoWikilinks(content, vaultIds)
+    body = applyWikilinks(body, knownProjects, knownEntries)
 
     const fm: Frontmatter = {
       type: 'note',
@@ -429,12 +433,16 @@ export class ObsidianStorage implements StorageBackend {
     const priority = (opts?.priority || 'normal') as Priority
     const topic = opts?.topic || null
 
+    // Auto-wikilinks: envuelve IDs existentes en [[id]] antes de persistir
+    const vaultIds = getVaultIdSet(this.projectDir(ws))
+    const wrappedContent = applyAutoWikilinks(content, vaultIds)
+
     // Leer o crear todos.md
     const todosPath = this.todosFilePath(ws)
     const { lines, fm } = this.readTodosFile(ws)
 
     // Crear nueva linea
-    const newLine = formatTodoLine(content, priority, opts?.remind_at, false, null, topic)
+    const newLine = formatTodoLine(wrappedContent, priority, opts?.remind_at, false, null, topic)
     lines.push(newLine)
 
     // Actualizar frontmatter
@@ -449,7 +457,7 @@ export class ObsidianStorage implements StorageBackend {
     const entry: TodoEntry = {
       id, type: 'todo', date, project: ws.project, workspace: ws.workspace,
       topic, tags: topic ? [topic] : [],
-      content, status: 'pending', priority,
+      content: wrappedContent, status: 'pending', priority,
       due: opts?.remind_at || null, remind_pattern: opts?.remind_pattern || null,
       remind_last_done: null, completed_at: null,
     }
@@ -598,9 +606,39 @@ export class ObsidianStorage implements StorageBackend {
     return deleted
   }
 
-  ackRecurringReminder(_id: EntryId): void {
-    // En el modelo de todos.md no hay remind_pattern inline — no-op
-    // Los reminders ahora van en carpeta reminders/
+  ackRecurringReminder(id: EntryId, snoozeUntil?: string): void {
+    const state = readReminderState(this.baseDir)
+    state.acks[id] = snoozeUntil ?? todayDate()
+    writeReminderStateAtomic(this.baseDir, state)
+  }
+
+  getEntryById(id: EntryId): (EntryMeta & { content: string }) | null {
+    // Busca el id (ID = "YYYY-MM-DD-slug") en cualquier carpeta del workspace.
+    const ws = this.getWorkspace()
+    const projectDir = this.projectDir(ws)
+    const types: EntryType[] = ['note', 'decision', 'debug', 'standup']
+    for (const t of types) {
+      const folder = TYPE_FOLDERS[t]
+      const dir = join(projectDir, folder)
+      if (!existsSync(dir)) continue
+      const files = globMarkdown(dir)
+      for (const f of files) {
+        const fid = extractIdFromFilename(basename(f))
+        if (fid === id) {
+          const parsed = readEntry(f)
+          const fm = parsed.frontmatter
+          return {
+            id, type: t, date: String(fm.date || ''),
+            project: String(fm.project || ws.project),
+            workspace: String(fm.workspace || ws.workspace),
+            topic: (fm.topic as string | undefined) ?? null,
+            tags: (fm.tags as string[]) || [],
+            content: parsed.body,
+          }
+        }
+      }
+    }
+    return null
   }
 
   // ── Specialized entries ──
@@ -624,7 +662,9 @@ export class ObsidianStorage implements StorageBackend {
     const projectDir = this.projectDir(ws)
     const knownProjects = getKnownProjects(this.baseDir)
     const knownEntries = getKnownEntryTitles(this.baseDir, projectDir)
-    const body = applyWikilinks(formatStandup(yesterday, today, blockers), knownProjects, knownEntries)
+    const vaultIds = getVaultIdSet(projectDir)
+    let body = applyAutoWikilinks(formatStandup(yesterday, today, blockers), vaultIds)
+    body = applyWikilinks(body, knownProjects, knownEntries)
     writeEntry(join(dir, filename), fm, body)
 
     const entry: StandupEntry = {
@@ -655,7 +695,9 @@ export class ObsidianStorage implements StorageBackend {
     const projectDir = this.projectDir(ws)
     const knownProjects = getKnownProjects(this.baseDir)
     const knownEntries = getKnownEntryTitles(this.baseDir, projectDir)
-    const body = applyWikilinks(formatDecision(title, context, options, decision, consequences), knownProjects, knownEntries)
+    const vaultIdsDec = getVaultIdSet(projectDir)
+    let body = applyAutoWikilinks(formatDecision(title, context, options, decision, consequences), vaultIdsDec)
+    body = applyWikilinks(body, knownProjects, knownEntries)
     writeEntry(join(dir, filename), fm, body)
 
     const entry: DecisionEntry = {
@@ -695,7 +737,9 @@ export class ObsidianStorage implements StorageBackend {
     const projectDir = this.projectDir(ws)
     const knownProjects = getKnownProjects(this.baseDir)
     const knownEntries = getKnownEntryTitles(this.baseDir, projectDir)
-    const body = applyWikilinks(formatDebug(title, error, cause, fix, attachmentName), knownProjects, knownEntries)
+    const vaultIdsDbg = getVaultIdSet(projectDir)
+    let body = applyAutoWikilinks(formatDebug(title, error, cause, fix, attachmentName), vaultIdsDbg)
+    body = applyWikilinks(body, knownProjects, knownEntries)
     writeEntry(join(dir, filename), fm, body)
 
     const entry: DebugEntry = {
@@ -1097,8 +1141,28 @@ export class ObsidianStorage implements StorageBackend {
     return scanCodeTodos(repoPath)
   }
 
-  syncCodeTodos(_repoPath: string, _todos: CodeTodo[]): { added: number; resolved: number } {
-    return { added: 0, resolved: 0 }
+  syncCodeTodos(repoPath: string, todos: CodeTodo[]): { added: number; resolved: number } {
+    if (!repoPath) return { added: 0, resolved: 0 }
+    const snapshotPath = join(this.baseDir, '.logbook', 'code-todos-snapshot.json')
+    let prev: CodeTodo[] = []
+    if (existsSync(snapshotPath)) {
+      try {
+        const raw = JSON.parse(readFileSync(snapshotPath, 'utf-8'))
+        if (Array.isArray(raw?.items)) prev = raw.items as CodeTodo[]
+      } catch {}
+    }
+    const key = (t: CodeTodo) => `${t.file}:${t.line}:${t.content}`
+    const prevSet = new Set(prev.map(key))
+    const currSet = new Set(todos.map(key))
+    const added = todos.filter((t) => !prevSet.has(key(t))).length
+    const resolved = prev.filter((t) => !currSet.has(key(t))).length
+    ensureDir(dirname(snapshotPath))
+    writeFileSync(
+      snapshotPath,
+      JSON.stringify({ version: 1, updatedAt: nowISO(), items: todos }, null, 2),
+      'utf-8',
+    )
+    return { added, resolved }
   }
 
   // ── Obsidian features ──

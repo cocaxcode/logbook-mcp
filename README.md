@@ -2,7 +2,7 @@
   <h1 align="center">@cocaxcode/logbook-mcp</h1>
   <p align="center">
     <strong>Your developer logbook, always one sentence away.</strong><br/>
-    Notes &middot; TODOs &middot; Reminders &middot; Code scanning &middot; Full-text search &middot; Obsidian mode &middot; Zero config
+    Notes &middot; TODOs &middot; Reminders &middot; Code scanning &middot; Full-text search &middot; Native CLI &middot; Obsidian-only
   </p>
 </p>
 
@@ -11,8 +11,10 @@
   <a href="https://www.npmjs.com/package/@cocaxcode/logbook-mcp"><img src="https://img.shields.io/npm/dm/@cocaxcode/logbook-mcp.svg?style=flat-square" alt="npm downloads" /></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square" alt="License" /></a>
   <img src="https://img.shields.io/badge/node-%3E%3D20-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node" />
-  <img src="https://img.shields.io/badge/tools-10-blueviolet?style=flat-square" alt="10 tools" />
+  <img src="https://img.shields.io/badge/tools-5%20%2B%205%20deprecated-blueviolet?style=flat-square" alt="5 + 5 deprecated" />
 </p>
+
+> **⚠️ v2.0 breaking change:** SQLite eliminado. v2 sólo soporta backend Obsidian. Datos en `~/.logbook/logbook.db` (v1) **no se migran automáticamente** — quedan intactos en disco. Si necesitas acceso a ellos, mantente en `@cocaxcode/logbook-mcp@0.4`. Tools 10→5 (con shims deprecated). Ver [CHANGELOG.md](./CHANGELOG.md) para detalles.
 
 <p align="center">
   <a href="#quick-overview">Overview</a> &middot;

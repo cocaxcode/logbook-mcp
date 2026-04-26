@@ -31,6 +31,21 @@ describe('ObsidianStorage', () => {
 
   // ── Notes ──
 
+  describe('auto-wikilinks integration', () => {
+    it('wraps existing entry id in [[id]] when persisting a note', () => {
+      const first = storage.insertNote('Plan v2 inicial')
+      // First note creates the id; second note references it.
+      const second = storage.insertNote(`Ver ${first.id} para detalles`)
+      expect(second.content).toContain(`[[${first.id}]]`)
+    })
+
+    it('wraps existing entry id in [[id]] when persisting a todo', () => {
+      const first = storage.insertNote('Plan v2 inicial')
+      const todo = storage.insertTodo(`Revisar ${first.id} antes del viernes`)
+      expect(todo.content).toContain(`[[${first.id}]]`)
+    })
+  })
+
   describe('insertNote', () => {
     it('creates a markdown file with frontmatter', () => {
       const note = storage.insertNote('Test note content', 'feature')

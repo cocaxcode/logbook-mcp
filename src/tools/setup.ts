@@ -2,32 +2,43 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { existsSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { getStorage, getStorageMode } from '../storage/index.js'
-import { resolveConfig, getConfigPath, getBaseDir } from '../config.js'
-import { ObsidianStorage } from '../storage/obsidian/index.js'
-import { getDb } from '../db/connection.js'
-import { getNotes, getTodos } from '../db/queries.js'
+import { getStorage } from '../storage/index.js'
+import { resolveConfig, getConfigPath } from '../config.js'
 
 export function registerSetupTool(server: McpServer): void {
   server.tool(
     'logbook_setup',
     `Administracion del logbook. Acciones disponibles:
 - init: Inicializa vault Obsidian (dashboard, templates, inbox).
-- migrate: Migra datos de SQLite a Obsidian manualmente. Requiere modo obsidian.
-- status: Muestra modo actual, config, estado de migracion.`,
+- status: Muestra config y vault activo.
+- inbox: Bandeja de entrada (sub-accion via inbox_action: list|process).
+- topics: Topics (sub-accion via topic_action: list|add).`,
     {
-      action: z.enum(['init', 'migrate', 'status']).describe('Accion a ejecutar'),
-      force: z.boolean().optional().default(false).describe('Regenerar aunque ya existan (init)'),
+      action: z.enum(['init', 'status', 'inbox', 'topics']).describe('Accion principal'),
+      force: z.boolean().optional().default(false).describe('Regenerar (init)'),
+      // inbox sub-action
+      inbox_action: z.enum(['list', 'process']).optional().describe('Sub-accion de inbox'),
+      id: z.string().optional().describe('ID (inbox process)'),
+      project: z.string().optional().describe('Proyecto destino (inbox process)'),
+      topic: z.string().optional().describe('Topic a asignar (inbox process, topics add)'),
+      type: z.enum(['note', 'decision', 'debug', 'standup']).optional().describe('Tipo (inbox process)'),
+      // topics sub-action
+      topic_action: z.enum(['list', 'add']).optional().describe('Sub-accion de topics'),
+      name: z.string().min(1).max(50).regex(/^[a-z0-9-]+$/).optional().describe('Nombre del topic (add)'),
+      description: z.string().max(200).optional().describe('Descripcion (add)'),
+      kind: z.enum(['note', 'todo', 'table']).optional().default('note').describe('Tipo (add)'),
+      folder: z.string().max(50).regex(/^[a-z0-9-]+$/).optional().describe('Carpeta (add)'),
+      show_in_index: z.boolean().optional().default(true).describe('Mostrar en index (add)'),
     },
-    async ({ action, force }) => {
+    async (params) => {
       try {
-        switch (action) {
-          case 'init': {
-            const storage = getStorage()
-            storage.autoRegisterRepo()
-            const dashboard = storage.generateDashboard(force)
-            const templates = storage.generateTemplates(force)
+        const storage = getStorage()
 
+        switch (params.action) {
+          case 'init': {
+            storage.autoRegisterRepo()
+            const dashboard = storage.generateDashboard(params.force)
+            const templates = storage.generateTemplates(params.force)
             const baseDir = process.env.LOGBOOK_DIR
             let inboxCreated = false
             let inboxDir = ''
@@ -38,103 +49,46 @@ export function registerSetupTool(server: McpServer): void {
                 inboxCreated = true
               }
             }
-
             return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({ dashboard, templates, inbox: { path: inboxDir, created: inboxCreated } }),
-              }],
-            }
-          }
-
-          case 'migrate': {
-            if (getStorageMode() !== 'obsidian') {
-              return {
-                isError: true,
-                content: [{
-                  type: 'text' as const,
-                  text: 'logbook_setup action:migrate requiere modo obsidian. Configura --storage obsidian --dir <path> en los args del MCP, o "storage": "obsidian" en ~/.logbook/config.json. Luego reinicia el servidor.',
-                }],
-              }
-            }
-
-            const storage = getStorage()
-            storage.autoRegisterRepo()
-
-            let migratedNotes = 0
-            let migratedTodos = 0
-            let sqliteMigrated = false
-
-            try {
-              const db = getDb()
-              const notes = getNotes(db, { limit: 10000 })
-              const todos = getTodos(db, { limit: 10000 })
-
-              for (const note of notes) {
-                try {
-                  storage.insertNote(note.content, note.topic_name || undefined)
-                  migratedNotes++
-                } catch { /* skip */ }
-              }
-
-              for (const todo of todos) {
-                try {
-                  const entry = storage.insertTodo(todo.content, {
-                    topic: todo.topic_name || undefined,
-                    priority: todo.priority,
-                    remind_at: todo.remind_at || undefined,
-                    remind_pattern: todo.remind_pattern || undefined,
-                  })
-                  if (todo.status === 'done') {
-                    storage.updateTodoStatus([entry.id], 'done')
-                  }
-                  migratedTodos++
-                } catch { /* skip */ }
-              }
-
-              sqliteMigrated = true
-            } catch { /* no sqlite db */ }
-
-            let todosFolderMigration = { migrated: 0, projects: [] as string[] }
-            if (storage instanceof ObsidianStorage) {
-              todosFolderMigration = storage.migrateTodosFolder()
-            }
-
-            return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({
-                  sqlite: sqliteMigrated ? { notes: migratedNotes, todos: migratedTodos, total: migratedNotes + migratedTodos, source: 'sqlite (~/.logbook/logbook.db)' } : 'No se encontro base de datos SQLite',
-                  todosConsolidation: todosFolderMigration,
-                  destination: process.env.LOGBOOK_DIR,
-                }),
-              }],
+              content: [{ type: 'text' as const, text: JSON.stringify({ dashboard, templates, inbox: { path: inboxDir, created: inboxCreated } }) }],
             }
           }
 
           case 'status': {
             const config = resolveConfig()
-            const markerPath = join(getBaseDir(), '.migrated')
-            const dbPath = join(getBaseDir(), 'logbook.db')
-
             return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({
-                  storage: config.storage,
-                  dir: config.dir,
-                  workspace: config.workspace,
-                  autoMigrate: config.autoMigrate,
-                  configFile: getConfigPath(),
-                  sqliteDb: { path: dbPath, exists: existsSync(dbPath) },
-                  migrated: existsSync(markerPath),
-                }),
-              }],
+              content: [{ type: 'text' as const, text: JSON.stringify({ dir: config.dir, workspace: config.workspace, configFile: getConfigPath() }) }],
             }
           }
 
+          case 'inbox': {
+            storage.autoRegisterRepo()
+            if (params.inbox_action === 'process') {
+              if (!params.id) return { isError: true, content: [{ type: 'text' as const, text: '"id" requerido para inbox process' }] }
+              if (!params.project) return { isError: true, content: [{ type: 'text' as const, text: '"project" requerido para inbox process' }] }
+              const result = storage.processInboxItem(params.id, params.project, params.topic, params.type)
+              return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] }
+            }
+            const items = storage.getInboxItems()
+            return { content: [{ type: 'text' as const, text: JSON.stringify(items) }] }
+          }
+
+          case 'topics': {
+            if (params.topic_action === 'add') {
+              if (!params.name) return { isError: true, content: [{ type: 'text' as const, text: '"name" requerido para topics add' }] }
+              const topics = storage.getTopics()
+              if (topics.some((t) => t.name === params.name)) {
+                return { isError: true, content: [{ type: 'text' as const, text: `El topic "${params.name}" ya existe` }] }
+              }
+              const topic = storage.insertTopic(params.name, params.description, params.kind, params.folder, params.show_in_index)
+              return { content: [{ type: 'text' as const, text: JSON.stringify(topic) }] }
+            }
+            const topics = storage.getTopics()
+            return { content: [{ type: 'text' as const, text: JSON.stringify(topics) }] }
+          }
+
           default:
-            return { isError: true, content: [{ type: 'text' as const, text: `Accion desconocida: ${action}` }] }
+            return { isError: true, content: [{ type: 'text' as const, text: `Accion desconocida: ${params.action}` }] }
         }
       } catch (err: unknown) {
         return {

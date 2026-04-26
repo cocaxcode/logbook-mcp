@@ -1,6 +1,6 @@
 // ── Storage abstractions (re-exports) ──
 
-export type { StorageMode, EntryType, EntryId, StorageBackend } from './storage/types.js'
+export type { EntryType, EntryId, StorageBackend } from './storage/types.js'
 export type { RepoInfo, WorkspaceInfo, EntryMeta } from './storage/types.js'
 export type { NoteEntry, TodoEntry, StandupEntry, DecisionEntry, DebugEntry } from './storage/types.js'
 export type {

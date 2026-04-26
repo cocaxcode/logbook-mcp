@@ -1,0 +1,52 @@
+# Changelog
+
+## 2.0.0-rc.1 — 2026-04-26
+
+**Hard breaking change.** SQLite eliminado del paquete. v2 es Obsidian-only.
+
+### Migration from v1
+
+Si tenías datos en `~/.logbook/logbook.db`, **no se migran automáticamente**. El archivo queda intacto en disco — v2 no lo lee ni lo borra. Si necesitas acceso a esos datos, reinstala v1 (`npm i -g @cocaxcode/logbook-mcp@0.4`).
+
+### Removed
+
+- Backend SQLite (`src/db/`, `src/storage/sqlite/`, `src/auto-migrate.ts`).
+- Dependencia nativa `better-sqlite3`.
+- `generateDashboard()` con Dataview hardcoded.
+- `migrateTodosFolder()` (residuo de migraciones previas).
+- 5 tools individuales (ver shims más abajo).
+
+### Added
+
+- **Sistema de config en capas** (`src/config/`): `CLI > env > repo .logbook.json > vault.json > global > defaults` con `ConfigTrace` por campo.
+- **Modo CLI nativo**: `logbook-mcp setup init|status`, `note`, `todo add`, `search` sin `--mcp`.
+- **Wizard `setup init`** con detección de vaults Obsidian (cascada `obsidian.json` → scan), detección de plugins relevantes, generación de snippet MCP por cliente (claude-code, claude-desktop, cursor, windsurf, vscode, codex, gemini).
+- **Auto-wikilinks**: contenido que menciona un id `YYYY-MM-DD-slug` existente se envuelve automáticamente como `[[id]]`. Soporta `ref:<id>`. Idempotente. Flag `autoWikilink` (default `true`).
+- **Orama search adapter** (`src/storage/obsidian/orama-adapter.ts`): índice full-text BM25+fuzzy puro JS, lazy-build, cache `.logbook/index-cache.json`. Disponible para uso (no auto-cableado al `search()` síncrono actual).
+- **`ackRecurringReminder` real**: persiste acks en `.logbook/reminders-state.json` (write atómico). Soporta snooze por fecha.
+- **`syncCodeTodos` real**: snapshot diff en `.logbook/code-todos-snapshot.json`; calcula `added/resolved` reales.
+- **`getEntryById(id)`**: busca un entry por id en cualquier carpeta del workspace.
+- Action **`logbook_query.get`** para lazy-loading del body completo tras un `search`.
+
+### Changed
+
+- **Tools MCP: 10 → 5**.
+  - `logbook_query` absorbe acciones: `search`, `log`, `timeline`, **`tags`**, **`reminders`**, **`review`**, **`get`**.
+  - `logbook_setup` absorbe acciones: `init`, `status`, **`inbox`**, **`topics`**.
+  - Los 5 tools eliminados (`logbook_tags`, `logbook_reminders`, `logbook_review`, `logbook_inbox`, `logbook_topics`) **siguen registrados como shims deprecated** que delegan a las acciones consolidadas. Devuelven `{ _deprecated: true, _replacement: "<tool>.<action>" }`. Se eliminan en v2.2.
+
+### Tool mapping (v1 → v2)
+
+| v1 tool | v2 |
+|---------|----|
+| `logbook_tags` | `logbook_query` action: `tags` |
+| `logbook_reminders` | `logbook_query` action: `reminders` |
+| `logbook_review` | `logbook_query` action: `review` |
+| `logbook_inbox` | `logbook_setup` action: `inbox` (sub-action via `inbox_action`) |
+| `logbook_topics` | `logbook_setup` action: `topics` (sub-action via `topic_action`) |
+
+### Internal
+
+- Eliminados `src/__tests__/db.test.ts`, `migrate.test.ts`, `tools.test.ts`, `helpers.ts`, `storage-factory.test.ts` (todos basados en SQLite).
+- Nuevos tests: config-resolve, config-detect-vaults, config-reminders-state, auto-wikilinks, orama-adapter, cli-dispatcher, cli-snippet.
+- 133 tests verde.

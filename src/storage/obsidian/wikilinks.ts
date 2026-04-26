@@ -38,6 +38,28 @@ export function getKnownProjects(baseDir: string): string[] {
  * Extracts titles from filename slugs (converts dashes to spaces, strips date prefix).
  * Only returns titles longer than 4 characters.
  */
+/**
+ * Collect all entry IDs (`YYYY-MM-DD-slug`) reachable under projectDir.
+ * Used by the auto-wikilinks middleware to wrap mentions of existing notes.
+ */
+export function getVaultIdSet(projectDir: string): Set<string> {
+  const ids = new Set<string>()
+  const subDirs = ['notes', 'todos', 'decisions', 'debug', 'standups', 'reminders']
+  for (const sub of subDirs) {
+    const dir = join(projectDir, sub)
+    if (!existsSync(dir)) continue
+    try {
+      const files = readdirSync(dir, { withFileTypes: true })
+        .filter((f) => f.isFile() && f.name.endsWith('.md'))
+      for (const file of files) {
+        const name = basename(file.name, '.md')
+        if (/^\d{4}-\d{2}-\d{2}-[a-z0-9][a-z0-9-]*$/.test(name)) ids.add(name)
+      }
+    } catch {}
+  }
+  return ids
+}
+
 export function getKnownEntryTitles(_baseDir: string, projectDir: string): string[] {
   const titles: string[] = []
   const subDirs = ['decisions', 'debug']
