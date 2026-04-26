@@ -5,11 +5,14 @@ import { homedir } from 'node:os'
 export interface LogbookConfig {
   dir: string | null
   workspace: string | null
+  /** Orama tokenizer language. Default 'spanish'. Common: 'english', 'french', 'german', 'portuguese', 'italian'. */
+  language: string | null
 }
 
 const DEFAULTS: LogbookConfig = {
   dir: null,
   workspace: null,
+  language: null,
 }
 
 /** Base directory for logbook metadata (~/.logbook or LOGBOOK_BASE_DIR). */
@@ -34,6 +37,7 @@ export function loadConfig(): LogbookConfig | null {
     return {
       dir: typeof parsed.dir === 'string' ? parsed.dir : DEFAULTS.dir,
       workspace: typeof parsed.workspace === 'string' ? parsed.workspace : DEFAULTS.workspace,
+      language: typeof parsed.language === 'string' ? parsed.language : DEFAULTS.language,
     }
   } catch {
     return null
@@ -59,6 +63,7 @@ export function resolveConfig(): LogbookConfig & { dir: string } {
 
   const dir = process.env.LOGBOOK_DIR ?? fileConfig?.dir ?? DEFAULTS.dir
   const workspace = process.env.LOGBOOK_WORKSPACE ?? fileConfig?.workspace ?? DEFAULTS.workspace
+  const language = process.env.LOGBOOK_LANG ?? fileConfig?.language ?? DEFAULTS.language
 
   if (!dir) {
     throw new Error(
@@ -66,7 +71,7 @@ export function resolveConfig(): LogbookConfig & { dir: string } {
     )
   }
 
-  return { dir, workspace }
+  return { dir, workspace, language }
 }
 
 /** Ensure config file exists. */

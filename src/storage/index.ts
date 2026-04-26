@@ -7,7 +7,7 @@ let instance: StorageBackend | null = null
 export function getStorage(): StorageBackend {
   if (instance) return instance
   const config = resolveConfig()
-  instance = new ObsidianStorage(config.dir)
+  instance = new ObsidianStorage(config.dir, { language: config.language ?? undefined })
   return instance
 }
 

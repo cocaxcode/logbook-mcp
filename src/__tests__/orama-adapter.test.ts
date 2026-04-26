@@ -55,4 +55,12 @@ describe('orama-adapter', () => {
     const results = await searchIndex({ baseDir }, 'qwerty')
     expect(results.length).toBe(0)
   })
+
+  it('honours language override (english stems differently than spanish)', async () => {
+    writeMd('proj/notes/2026-04-26-en.md', { type: 'note', date: '2026-04-26', project: 'proj' }, 'Running tests on the deployment pipeline')
+    resetIndex()
+    const enResults = await searchIndex({ baseDir, language: 'english' }, 'run')
+    // English stemmer reduces "running" → "run"; Spanish would not
+    expect(enResults.length).toBeGreaterThan(0)
+  })
 })

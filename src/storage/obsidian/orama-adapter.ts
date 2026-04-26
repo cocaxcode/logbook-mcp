@@ -30,8 +30,19 @@ export interface IndexedDoc {
   path: string
 }
 
+/** Languages supported by Orama out-of-the-box. */
+export type OramaLanguage =
+  | 'arabic' | 'armenian' | 'bulgarian' | 'catalan' | 'chinese' | 'danish'
+  | 'dutch' | 'english' | 'finnish' | 'french' | 'german' | 'greek'
+  | 'hindi' | 'hungarian' | 'indonesian' | 'irish' | 'italian' | 'japanese'
+  | 'korean' | 'lithuanian' | 'mongolian' | 'nepali' | 'norwegian' | 'persian'
+  | 'portuguese' | 'romanian' | 'russian' | 'serbian' | 'slovenian' | 'spanish'
+  | 'swedish' | 'tamil' | 'turkish' | 'ukrainian' | 'sanskrit'
+
 export interface OramaCtx {
   baseDir: string
+  /** Optional. Defaults to 'spanish' (configurable via LOGBOOK_LANG / repo config). */
+  language?: OramaLanguage
 }
 
 const SCHEMA = {
@@ -106,7 +117,7 @@ export async function buildIndex(ctx: OramaCtx): Promise<AnyOrama> {
     indexInstance = cached
     return cached
   }
-  const db = create({ schema: SCHEMA, language: 'spanish' })
+  const db = create({ schema: SCHEMA, language: ctx.language ?? 'spanish' })
   const files = walkMd(ctx.baseDir)
   for (const f of files) {
     const doc = docFromFile(ctx.baseDir, f)
@@ -196,7 +207,7 @@ export async function loadCache(ctx: OramaCtx): Promise<AnyOrama | null> {
   if (!existsSync(path)) return null
   try {
     const raw = JSON.parse(readFileSync(path, 'utf-8'))
-    const db = create({ schema: SCHEMA, language: 'spanish' })
+    const db = create({ schema: SCHEMA, language: ctx.language ?? 'spanish' })
     load(db, raw)
     return db
   } catch {

@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.2.0 — 2026-04-26
+
+### Added
+
+- **Idioma del tokenizer Orama configurable**: el adapter acepta `language` por contexto. Valores soportados: `arabic`, `armenian`, `bulgarian`, `catalan`, `chinese`, `danish`, `dutch`, `english`, `finnish`, `french`, `german`, `greek`, `hindi`, `hungarian`, `indonesian`, `irish`, `italian`, `japanese`, `korean`, `lithuanian`, `mongolian`, `nepali`, `norwegian`, `persian`, `portuguese`, `romanian`, `russian`, `serbian`, `slovenian`, `spanish` (default), `swedish`, `tamil`, `turkish`, `ukrainian`, `sanskrit`.
+- **Tres formas de configurar**:
+  - Variable de entorno: `LOGBOOK_LANG=english`
+  - Config file: añadir `"language": "english"` en `~/.logbook/config.json`
+  - Constructor: `new ObsidianStorage(dir, { language: 'english' })`
+- Test de regresión: stemmer inglés reduce "running" → "run" y resuelve query "run" → encuentra el doc.
+
+### Changed
+
+- `LogbookConfig` ahora incluye campo opcional `language`. `resolveConfig()` resuelve con prioridad `LOGBOOK_LANG > config.json > default 'spanish'`.
+- `getStorage()` pasa el idioma resuelto al constructor de `ObsidianStorage`.
+
 ## 2.1.2 — 2026-04-26
 
 ### Fixed

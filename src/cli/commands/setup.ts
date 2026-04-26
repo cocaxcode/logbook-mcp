@@ -132,7 +132,7 @@ async function runInit(rest: string[]): Promise<number> {
     copyFileSync(cfgPath, backup)
     console.error(`Backed up existing config to ${backup}`)
   }
-  writeConfig({ dir, workspace: workspaceArg ?? null })
+  writeConfig({ dir, workspace: workspaceArg ?? null, language: null })
   console.error(`Wrote config to ${cfgPath}`)
 
   printSnippet(dir, workspaceArg, clientArg)

@@ -45,15 +45,15 @@ import { readState as readReminderState, writeStateAtomic as writeReminderStateA
 import { searchIndex as oramaSearch, updateDoc as oramaUpdateDoc, removeDoc as oramaRemoveDoc } from './orama-adapter.js'
 
 /** Fire-and-forget update of the Orama index for a single file. */
-function syncOramaFile(baseDir: string, filePath: string): void {
-  oramaUpdateDoc({ baseDir }, filePath).catch((e) => {
+function syncOramaFile(baseDir: string, filePath: string, language?: OramaLanguage): void {
+  oramaUpdateDoc({ baseDir, language }, filePath).catch((e) => {
     console.error(`[logbook] Orama updateDoc failed: ${(e as Error).message}`)
   })
 }
 
 /** Fire-and-forget removal from the Orama index. */
-function dropOramaFile(baseDir: string, idOrPath: string): void {
-  oramaRemoveDoc({ baseDir }, idOrPath).catch((e) => {
+function dropOramaFile(baseDir: string, idOrPath: string, language?: OramaLanguage): void {
+  oramaRemoveDoc({ baseDir, language }, idOrPath).catch((e) => {
     console.error(`[logbook] Orama removeDoc failed: ${(e as Error).message}`)
   })
 }
@@ -208,13 +208,22 @@ function getISOWeekNumber(date: Date): number {
 
 // ── ObsidianStorage ──
 
+import type { OramaLanguage } from './orama-adapter.js'
+
+export interface ObsidianStorageOptions {
+  /** Orama tokenizer language. Default 'spanish'. */
+  language?: OramaLanguage | string
+}
+
 export class ObsidianStorage implements StorageBackend {
   baseDir: string
   repoPath: string | null = null
   wsInfo: WorkspaceInfo | null = null
+  language: OramaLanguage | undefined
 
-  constructor(baseDir: string) {
+  constructor(baseDir: string, opts: ObsidianStorageOptions = {}) {
     this.baseDir = baseDir.replace(/\\/g, '/')
+    this.language = opts.language as OramaLanguage | undefined
     ensureDir(this.baseDir)
   }
 
@@ -282,7 +291,7 @@ export class ObsidianStorage implements StorageBackend {
 
     const filePath = join(dir, filename)
     writeEntry(filePath, fm, body)
-    syncOramaFile(this.baseDir, filePath)
+    syncOramaFile(this.baseDir, filePath, this.language)
 
     const entry: NoteEntry = {
       id, type: 'note', date, project: ws.project, workspace: ws.workspace,
@@ -684,7 +693,7 @@ export class ObsidianStorage implements StorageBackend {
     body = applyWikilinks(body, knownProjects, knownEntries)
     const standupPath = join(dir, filename)
     writeEntry(standupPath, fm, body)
-    syncOramaFile(this.baseDir, standupPath)
+    syncOramaFile(this.baseDir, standupPath, this.language)
 
     const entry: StandupEntry = {
       id, type: 'standup', date, project: ws.project, workspace: ws.workspace,
@@ -719,7 +728,7 @@ export class ObsidianStorage implements StorageBackend {
     body = applyWikilinks(body, knownProjects, knownEntries)
     const decisionPath = join(dir, filename)
     writeEntry(decisionPath, fm, body)
-    syncOramaFile(this.baseDir, decisionPath)
+    syncOramaFile(this.baseDir, decisionPath, this.language)
 
     const entry: DecisionEntry = {
       id, type: 'decision', date, project: ws.project, workspace: ws.workspace,
@@ -763,7 +772,7 @@ export class ObsidianStorage implements StorageBackend {
     body = applyWikilinks(body, knownProjects, knownEntries)
     const debugPath = join(dir, filename)
     writeEntry(debugPath, fm, body)
-    syncOramaFile(this.baseDir, debugPath)
+    syncOramaFile(this.baseDir, debugPath, this.language)
 
     const entry: DebugEntry = {
       id, type: 'debug', date, project: ws.project, workspace: ws.workspace,
@@ -784,7 +793,7 @@ export class ObsidianStorage implements StorageBackend {
     try {
       const limit = filters.limit ?? 20
       const oramaHits = await oramaSearch(
-        { baseDir: searchDir },
+        { baseDir: searchDir, language: this.language },
         query,
         {
           type: filters.type === 'all' ? undefined : filters.type === 'notes' ? 'note' : filters.type === 'todos' ? 'todo' : filters.type,
@@ -1739,7 +1748,7 @@ tags: [standup]
       if (fileId !== id) continue
 
       unlinkSync(file)
-      dropOramaFile(this.baseDir, id)
+      dropOramaFile(this.baseDir, id, this.language)
       return true
     }
 
