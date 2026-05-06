@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.4.4 — 2026-05-07
+
+### Fixed
+
+- **Drive letter como workspace en Windows**: cuando el repo estaba en la raíz de una unidad (ej. `C:\ingles`), `detectWorkspace()` devolvía `C:` como nombre de workspace, generando rutas inválidas en NTFS (`vault/logbook/C:/ingles`) y fallando con `ENOENT … mkdir`. Ahora se ignoran los drive letters en el fallback y se sanitizan los segmentos eliminando caracteres prohibidos por NTFS (`:`, `*`, `?`, `"`, `<`, `>`, `|`).
+
 ## 2.4.3 — 2026-04-26
 
 ### Fixed
